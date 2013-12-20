@@ -1,0 +1,57 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+use File::Temp qw/ :seekable /;
+use Sys::Hostname;
+use POSIX qw/ strftime /;
+use File::Basename;
+
+my $duplicity_options = "--ssh-backend pexpect --allow-source-mismatch";
+my $target_host = "bick-ubtu3";
+my $archive_dir = "/root/.cache/duplicity";
+my $target_path = "/mnt/backup/" . hostname ();
+my $logFile = sprintf "/var/log/backup/%s/%s", hostname (), strftime ('%Y%m%d-%H%M%S', localtime);
+my $logPath = dirname $logFile;
+system "mkdir -p $logPath";
+my @excludes = qw (
+	**/Downloads/**
+	**/tmp/**
+	**/temp/**
+	**/.cache/**
+	**/Cache/**
+	**/Trash/**
+	**/Dropbox/**
+    **/winhdd/**
+    **/Win7.vdi
+);
+push @excludes, "**/Ubuntu One/**";
+
+my $exclFH = File::Temp->new ();
+print $exclFH join ("\n", @excludes);
+$exclFH->seek (0, SEEK_SET);
+
+my %sources = (
+	# tax =>  "/mnt/win/save/Documents\\ and\\ Settings/All\\ Users/Documents/Family/Tax",
+	pic1 => "/mnt/win/Pictures",
+	# fowin4 => "/mnt/win/save/FOWIN4",
+	etc => "/etc",
+	home => "/home",
+	root => "/root",
+);
+my $duplProg = "/usr/bin/duplicity";
+my $method = "file:/";
+if ($target_host ne hostname ()) {
+	$method = sprintf "scp://root\@%s", $target_host;
+}
+my $PASSPHRASE = `cat /root/.passwords/dbackup`;
+chomp $PASSPHRASE;
+die "No passphrase or passphrase file!\n" unless $PASSPHRASE;
+for my $targetRemote (sort keys %sources) {
+	my $target = $sources{$targetRemote};
+	my $targetPath = "${method}/$target_path/$targetRemote";
+	print "Writing backup $target to $targetPath\n";
+	my $cmd = sprintf "%s --full-if-older-than 6D --log-file %s --async --exclude-globbing-filelist=%s --verbosity 5 --archive-dir %s %s %s %s",
+		$duplProg, $logFile, $exclFH, $archive_dir, $target, $targetPath, $duplicity_options || '';
+	system "/bin/sh -c \"PASSPHRASE=\\\"$PASSPHRASE\\\" $cmd\"";
+}
