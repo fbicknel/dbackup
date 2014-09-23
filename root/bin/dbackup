@@ -39,7 +39,7 @@ my %sources = (
 	home => "/home",
 	root => "/root",
 );
-my $duplProg = "/usr/bin/duplicity";
+my $duplProg = "/usr/local/bin/duplicity";
 my $method = "file:/";
 if ($target_host ne hostname ()) {
 	$method = sprintf "scp://root\@%s", $target_host;
