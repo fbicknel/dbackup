@@ -7,6 +7,9 @@ use Sys::Hostname;
 use POSIX qw/ strftime /;
 use File::Basename;
 
+my $older_than        = '6D'; # governs when to make full backups
+# If you're looking for cleanup; see ~fbicknel/bin/cleanup
+# my $older_than        = '10D'; # governs when to make full backups
 my $duplicity_options = "--ssh-backend pexpect --allow-source-mismatch";
 my $target_host = "bick-ubtu3";
 my $archive_dir = "/root/.cache/duplicity";
@@ -33,10 +36,11 @@ $exclFH->seek (0, SEEK_SET);
 
 my %sources = (
 	# tax =>  "/mnt/win/save/Documents\\ and\\ Settings/All\\ Users/Documents/Family/Tax",
-	pic1 => "/mnt/win/Pictures",
+	# pic1 => "/mnt/win/Pictures",
 	# fowin4 => "/mnt/win/save/FOWIN4",
 	etc => "/etc",
-	home => "/home",
+	home_fbicknel => "/home/fbicknel",
+	home_sbicknel => "/home/sbicknel",
 	root => "/root",
 );
 my $duplProg = "/usr/local/bin/duplicity";
@@ -51,7 +55,7 @@ for my $targetRemote (sort keys %sources) {
 	my $target = $sources{$targetRemote};
 	my $targetPath = "${method}/$target_path/$targetRemote";
 	print "Writing backup $target to $targetPath\n";
-	my $cmd = sprintf "%s --full-if-older-than 6D --log-file %s --async --exclude-globbing-filelist=%s --verbosity 5 --archive-dir %s %s %s %s",
+	my $cmd = sprintf "%s --full-if-older-than $older_than --log-file %s --async --exclude-globbing-filelist=%s --verbosity 5 --archive-dir %s %s %s %s",
 		$duplProg, $logFile, $exclFH, $archive_dir, $target, $targetPath, $duplicity_options || '';
 	system "/bin/sh -c \"PASSPHRASE=\\\"$PASSPHRASE\\\" $cmd\"";
 }
