@@ -1,4 +1,4 @@
-#!/usr/bin/perl -d
+#!/usr/bin/perl
 use strict;
 use warnings;
 
@@ -7,6 +7,10 @@ use Sys::Hostname;
 use POSIX qw/ strftime /;
 use File::Basename;
 
+system('/home/fbicknel/bin/make_snapshot home/sbicknel home_old/sbicknel_backup');
+system('/home/fbicknel/bin/make_snapshot home/fbicknel home_old/fbicknel_backup');
+system('/home/fbicknel/bin/make_snapshot Media/Music home_old/Music_backup');
+
 my $older_than        = '6D'; # governs when to make full backups
 # If you're looking for cleanup; see ~fbicknel/bin/cleanup
 # my $older_than        = '10D'; # governs when to make full backups
@@ -14,13 +18,8 @@ my $duplicity_options = "--ssh-backend pexpect --allow-source-mismatch";
 my $target_host = "bick-ubtu3";
 my $archive_dir = "/root/.cache/duplicity";
 my $target_path = "/mnt/backup/" . hostname ();
-my $time_string = strftime ('%Y%m%d-%H%M%S', localtime);
-my $logFile = sprintf "/var/log/backup/%s/%s", hostname (), $time_string;
+my $logFile = sprintf "/var/log/backup/%s/%s", hostname (), strftime ('%Y%m%d-%H%M%S', localtime);
 my $logPath = dirname $logFile;
-my $zfs         = '/sbin/zfs';
-if (not -x $zfs) {
-    undef $zfs; # no zfs on this system
-}
 system "mkdir -p $logPath";
 my @excludes = qw (
 	**/Downloads/**
@@ -30,47 +29,24 @@ my @excludes = qw (
 	**/Cache/**
 	**/Trash/**
 	**/Dropbox/**
-    **/winhdd/**
-    **/Win7.vdi
 );
 push @excludes, "**/Ubuntu One/**";
+push @excludes, "**/Azureus Downloads/**";
 
 my $exclFH = File::Temp->new ();
 print $exclFH join ("\n", @excludes);
 $exclFH->seek (0, SEEK_SET);
 
-my %zfs = ();
 my %sources = (
 	# tax =>  "/mnt/win/save/Documents\\ and\\ Settings/All\\ Users/Documents/Family/Tax",
 	# pic1 => "/mnt/win/Pictures",
 	# fowin4 => "/mnt/win/save/FOWIN4",
-	etc => "/etc",
-	home_fbicknel => "/home/fbicknel",
-	home_sbicknel => "/home/sbicknel",
-	root => "/root",
+	etc           => "/etc",
+	home_fbicknel => "/home_old/fbicknel_backup",
+	home_sbicknel => "/home_old/sbicknel_backup",
+	Music_backup  => "/home_old/Music_backup",
+	root          => "/root",
 );
-for my $source (keys %sources) {
-    my $zmounted = `$zfs get -H mounted $source`;
-    if ($?) {
-        next;
-    }
-    ($zmounted) = [split(" ", $zmounted)]->[2];
-    if ($zmounted ne 'yes') {
-        next;
-    }
-    $zfs{$source} = sprintf('dupl_%s', $time_string); # snapshot mount (part of snapshot name)
-}
-# Create snapshots on filesystems we may:
-my %zfs_source;
-for my $fs (keys %zfs) {
-    my $snapshot_name = sprintf ('%s@%s', $fs, $zfs{$fs});
-    system("$zfs snapshot -r $snapshot_name");
-    if ($?) {
-        die("unable to create snapshot: $snapshot_name\n");
-    } else {
-        $zfs_source{$fs} = sprintf('/%s/.zfs/snapshot/%s', $fs, $zfs{$fs});
-    }
-}
 my $duplProg = "/usr/local/bin/duplicity";
 my $method = "file:/";
 if ($target_host ne hostname ()) {
@@ -79,16 +55,11 @@ if ($target_host ne hostname ()) {
 my $PASSPHRASE = `cat /root/.passwords/dbackup`;
 chomp $PASSPHRASE;
 die "No passphrase or passphrase file!\n" unless $PASSPHRASE;
-for my $fs (sort keys %sources) {
-	my $source;
-    if ($zfs_source{$fs}) {
-        $source = $zfs_source{$fs};
-    } else {
-        $source = $sources{$fs};
-    }
-	my $targetPath = "${method}/$target_path/$fs";
-	print "Writing backup $source to $targetPath\n";
+for my $targetRemote (sort keys %sources) {
+	my $target = $sources{$targetRemote};
+	my $targetPath = "${method}/$target_path/$targetRemote";
+	print "Writing backup $target to $targetPath\n";
 	my $cmd = sprintf "%s --full-if-older-than $older_than --log-file %s --async --exclude-globbing-filelist=%s --verbosity 5 --archive-dir %s %s %s %s",
-		$duplProg, $logFile, $exclFH, $archive_dir, $source, $targetPath, $duplicity_options || '';
+		$duplProg, $logFile, $exclFH, $archive_dir, $target, $targetPath, $duplicity_options || '';
 	system "/bin/sh -c \"PASSPHRASE=\\\"$PASSPHRASE\\\" $cmd\"";
 }
