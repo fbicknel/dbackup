@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 
+my $VERSION = '0.2';
+
 use File::Temp qw/ :seekable /;
 use Sys::Hostname;
 use POSIX qw/ strftime /;
