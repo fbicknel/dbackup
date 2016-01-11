@@ -49,7 +49,7 @@ my %sources = (
 	Music_backup  => "/home_old/Music_backup",
 	root          => "/root",
 );
-my $duplProg = "/usr/local/bin/duplicity";
+my $duplProg = "/usr/bin/duplicity";
 my $method = "file:/";
 if ($target_host ne hostname ()) {
 	$method = sprintf "scp://root\@%s", $target_host;
