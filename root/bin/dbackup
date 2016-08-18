@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-my $VERSION = '0.2';
+my $VERSION = '0.3';
 
 use File::Temp qw/ :seekable /;
 use Sys::Hostname;
