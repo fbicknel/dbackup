@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+function cleanup_snapshots () {
+    declare -a F_SNAPSHOTS=("${!1}")
+    local F_KEEP=$2
+    local F_SNAPSHOT_QTY=${#F_SNAPSHOTS[@]}
+    if [ $F_SNAPSHOT_QTY -eq 0 ]; then
+        echo "No snapshots to clean up."
+        return
+    fi
+    echo "Found $F_SNAPSHOT_QTY incremental snapshots. Clean up until $F_KEEP remain..."
+    if [ $F_SNAPSHOT_QTY -lt $F_KEEP ]; then
+        echo "Not enough snapshots to clean up (need at least $F_KEEP)"
+        return
+    fi
+    # from  the array of snapshots we were given, we're going to want the
+    # first (oldest), and last (newest) one
+    local F_FIRST_SNAPSHOT=${F_SNAPSHOTS[0]}
+    local F_LAST_SNAPSHOT=${F_SNAPSHOTS[-1]}
+    local F_LAST_DELETED
+    let F_LAST_DELETED=$F_SNAPSHOT_QTY-$F_KEEP
+    local F_N=$F_LAST_DELETED
+    local SS
+    for SS in ${F_SNAPSHOTS[@]:0:$F_LAST_DELETED}; do
+        echo "**** Cleaning up snapshot: $F_FIRST_SNAPSHOT (# $F_N)"
+        $SUDO zfs destroy $SS
+        let F_N=${F_N}-1
+    done
+}
+ 
+STARTTIME=$(date +%s)
+echo "begin at $(date)."
+SUDO=/usr/bin/sudo
+# SUDO="echo"
+SOURCE=${1:-home/fbicknel}
+TARGET=${2:-home_old/fbicknel_backup}
+FORCE_NEW=$3
+echo "Backup from $SOURCE -> $TARGET"
+$SUDO zfs snapshot "${SOURCE}@backup_$(date +%s)" # this is what we're here for
+# First targets:
+T_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $TARGET | awk '/backup_[0-9]/ {print $1}'))
+TF_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $TARGET | awk '/backup_F_[0-9]/ {print $1}'))
+
+# Now sources;
+S_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $SOURCE | awk '/backup_[0-9]/ {print $1}'))
+SF_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $SOURCE | awk '/backup_F_[0-9]/ {print $1}'))
+SF_SNAPSHOT_QTY=${#SF_SNAPSHOTS[@]}
+TF_SNAPSHOT_QTY=${#TF_SNAPSHOTS[@]}
+let S_SNAPSHOT_QTY=${#S_SNAPSHOTS[@]}+${#SF_SNAPSHOTS[@]}
+let T_SNAPSHOT_QTY=${#T_SNAPSHOTS[@]}+${#TF_SNAPSHOTS[@]}
+echo "Found $S_SNAPSHOT_QTY total source snapshots."
+echo "Found $T_SNAPSHOT_QTY total target snapshots."
+if [ "$FORCE_NEW" = '-new' -o $T_SNAPSHOT_QTY -eq 0 \
+    -o $S_SNAPSHOT_QTY -lt 2 -o $SF_SNAPSHOT_QTY -eq 0 ]; then
+    if [ "$FORCE_NEW" = '-new' ]; then
+        echo "Found -new as arg 3 on the command line."
+    elif [ $SF_SNAPSHOT_QTY -eq 0 ]; then
+        echo "No full snapshots found on source: start over"
+    else
+        echo "Not enough snapshots of either source ($S_SNAPSHOT_QTY) or target ($T_SNAPSHOT_QTY)"
+    fi
+    echo "**** Sending first snapshot, then."
+    echo -e "\tRemoving all source _backup snapshots"
+    S_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $SOURCE | awk '/backup_/ {print $1}'))
+    cleanup_snapshots S_SNAPSHOTS[@] 0
+    echo -e "\tRemoving all target snapshots (ALL)"
+    AT_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $TARGET | awk '{print $1}'))
+    cleanup_snapshots AT_SNAPSHOTS[@] 0
+    echo -e "\tRemoving target ($TARGET)..."
+    $SUDO zfs destroy $TARGET
+    echo -e "\tCreate new snapshot on source ($SOURCE)"
+    # Note the _F_ in the snapshot name: this denotes the 'full' progenitor
+    $SUDO zfs snapshot "${SOURCE}@backup_F_$(date +%s)" # this is what we're here for
+    S_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $SOURCE | awk '/backup_/ {print $1}'))
+    echo -e "\tSending first full snapshot"
+    $SUDO zfs send ${S_SNAPSHOTS[0]} | $SUDO zfs receive -F $TARGET
+    RV=$?
+else
+    T_KEEP=5
+    echo "Clean up target snapshots:"
+    cleanup_snapshots T_SNAPSHOTS[@] $T_KEEP
+    S_KEEP=5
+    echo "Clean up source snapshots:"
+    cleanup_snapshots S_SNAPSHOTS[@] $S_KEEP
+    SF_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $SOURCE | awk '/backup_F_/ {print $1}'))
+    S_FULL_SNAPSHOT=${SF_SNAPSHOTS[-1]}
+    S_LAST_SNAPSHOT=${S_SNAPSHOTS[-1]}
+    let S_LAST_DELETED=$S_SNAPSHOT_QTY-$S_KEEP
+    echo "Sending incremental snapshot data from $S_FULL_SNAPSHOT..$S_LAST_SNAPSHOT to $TARGET"
+    $SUDO zfs send -i $S_FULL_SNAPSHOT $S_LAST_SNAPSHOT | $SUDO zfs receive -F $TARGET
+    RV=$?
+fi
+ENDTIME=$(date +%s)
+echo "done at $(date). $(($ENDTIME - $STARTTIME)) elapsed seconds"
+exit $RV
