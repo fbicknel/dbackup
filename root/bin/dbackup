@@ -11,7 +11,7 @@ use File::Basename;
 
 system('/home/fbicknel/bin/make_snapshot home/sbicknel home_old/sbicknel_backup');
 system('/home/fbicknel/bin/make_snapshot home/fbicknel home_old/fbicknel_backup');
-system('/home/fbicknel/bin/make_snapshot Media/Music home_old/Music_backup');
+system('/home/fbicknel/bin/make_snapshot home/Media/Music home_old/Music_backup');
 
 my $older_than        = '6D'; # governs when to make full backups
 # If you're looking for cleanup; see ~fbicknel/bin/cleanup
