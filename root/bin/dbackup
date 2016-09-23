@@ -9,14 +9,15 @@ use Sys::Hostname;
 use POSIX qw/ strftime /;
 use File::Basename;
 
-system('/home/fbicknel/bin/make_snapshot home/sbicknel home_old/sbicknel_backup');
-system('/home/fbicknel/bin/make_snapshot home/fbicknel home_old/fbicknel_backup');
-system('/home/fbicknel/bin/make_snapshot home/Media/Music home_old/Music_backup');
+system('/root/bin/make_snapshot home/sbicknel home_old/sbicknel_backup');
+system('/root/bin/make_snapshot home/fbicknel home_old/fbicknel_backup');
+system('/root/bin/make_snapshot home/Media/Music home_old/Music_backup');
 
 my $older_than        = '6D'; # governs when to make full backups
 # If you're looking for cleanup; see ~fbicknel/bin/cleanup
 # my $older_than        = '10D'; # governs when to make full backups
-my $duplicity_options = "--ssh-backend pexpect --allow-source-mismatch";
+# my $duplicity_options = "--ssh-backend pexpect --allow-source-mismatch";
+my $duplicity_options = "";
 my $target_host = "bick-ubtu3";
 my $archive_dir = "/root/.cache/duplicity";
 my $target_path = "/mnt/backup/" . hostname ();
