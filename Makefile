@@ -5,7 +5,7 @@ filelist := $$(cat MANIFEST)
 install: install_bin install_cron 
 
 install_cron:
-	crontab -l | sed -e '/###@duplicity@###/d'| sed -e '$$a@daily nice -n 19 /root/bin/dbackup > /var/log/backup/dbackup.out 2>&1 ###@duplicity@###' | crontab -
+	crontab -l | sed -e '/###@duplicity@###/d'| sed -e '$$a@daily nice -n 19 /root/bin/dbackup >> /var/log/backup/dbackup.out 2>&1 ###@duplicity@###' | crontab -
 
 uninstall_cron:
 	crontab -l | sed -e '/###@duplicity@###/d'| crontab -
