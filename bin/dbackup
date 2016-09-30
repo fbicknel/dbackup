@@ -2,21 +2,22 @@
 use strict;
 use warnings;
 
-my $VERSION = '0.3';
+my $VERSION = '0.4';
 
 use File::Temp qw/ :seekable /;
 use Sys::Hostname;
 use POSIX qw/ strftime /;
 use File::Basename;
 
-system('/home/fbicknel/bin/make_snapshot home/sbicknel home_old/sbicknel_backup');
-system('/home/fbicknel/bin/make_snapshot home/fbicknel home_old/fbicknel_backup');
-system('/home/fbicknel/bin/make_snapshot Media/Music home_old/Music_backup');
+system('/root/bin/make_snapshot home/sbicknel home_old/sbicknel_backup');
+system('/root/bin/make_snapshot home/fbicknel home_old/fbicknel_backup');
+system('/root/bin/make_snapshot home/Media/Music home_old/Music_backup');
 
 my $older_than        = '6D'; # governs when to make full backups
 # If you're looking for cleanup; see ~fbicknel/bin/cleanup
 # my $older_than        = '10D'; # governs when to make full backups
-my $duplicity_options = "--ssh-backend pexpect --allow-source-mismatch";
+# my $duplicity_options = "--ssh-backend pexpect --allow-source-mismatch";
+my $duplicity_options = "";
 my $target_host = "bick-ubtu3";
 my $archive_dir = "/root/.cache/duplicity";
 my $target_path = "/mnt/backup/" . hostname ();
@@ -65,3 +66,34 @@ for my $targetRemote (sort keys %sources) {
 		$duplProg, $logFile, $exclFH, $archive_dir, $target, $targetPath, $duplicity_options || '';
 	system "/bin/sh -c \"PASSPHRASE=\\\"$PASSPHRASE\\\" $cmd\"";
 }
+__END__
+
+=head1 NAME
+
+dbackup - Backup filesystems using duplicity
+
+=head1 SYNOPSIS
+
+dbackup
+
+=head1 OPTIONS
+
+=head1 DESCRIPTION
+
+Uses duplicity ultimately to move data from the filesystem into encrypted,
+compressed backups. Sources are hardcoded for now, as are ZFS snapshot
+preparations.
+
+=head1 EXAMPLES
+
+=head1 SEE ALSO
+
+duplicity
+zfs
+
+=head1 BUGS
+
+Hard-coded sources, targets and snapshots.
+No documentation options.
+
+=cut
