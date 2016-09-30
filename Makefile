@@ -1,4 +1,4 @@
-prefix=/root
+prefix=''
 
 filelist := $$(cat MANIFEST)
 
@@ -15,16 +15,16 @@ install_etc:
 	install -m 0755 etc/logrotate.d/dbackup $(prefix)/etc/logrotate.d
 
 install_bin:
-	test -d $(prefix) || mkdir -p $(prefix)/bin
+	test -d $(prefix)/root/bin || mkdir -p $(prefix)/root/bin
 	for file in $(filelist); do \
-		install -m 0755 $$file $(prefix)/bin ; \
+		install -m 0755 $$file $(prefix)/root/bin ; \
 	done 
 
 uninstall: uninstall_cron uninstall_bin uninstall_etc
 
 uninstall_bin:
 	for file in $(filelist); do \
-		rm $(prefix)/$$file ; \
+		rm -f $(prefix)/root/$$file ; \
 	done
 
 uninstall_etc:
