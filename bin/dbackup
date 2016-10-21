@@ -2,16 +2,18 @@
 use strict;
 use warnings;
 
-my $VERSION = '0.4';
+my $VERSION = '0.5';
 
 use File::Temp qw/ :seekable /;
 use Sys::Hostname;
 use POSIX qw/ strftime /;
 use File::Basename;
 
-system('/root/bin/make_snapshot home/sbicknel home_old/sbicknel_backup');
-system('/root/bin/make_snapshot home/fbicknel home_old/fbicknel_backup');
-system('/root/bin/make_snapshot home/Media/Music home_old/Music_backup');
+my $pool = 'backup';
+
+system("/root/bin/make_snapshot home/sbicknel ${pool}/sbicknel_backup");
+system("/root/bin/make_snapshot home/fbicknel ${pool}/fbicknel_backup");
+system("/root/bin/make_snapshot home/Media/Music ${pool}/Music_backup");
 
 my $older_than        = '6D'; # governs when to make full backups
 # If you're looking for cleanup; see ~fbicknel/bin/cleanup
@@ -45,9 +47,9 @@ my %sources = (
 	# pic1 => "/mnt/win/Pictures",
 	# fowin4 => "/mnt/win/save/FOWIN4",
 	etc           => "/etc",
-	home_fbicknel => "/home_old/fbicknel_backup",
-	home_sbicknel => "/home_old/sbicknel_backup",
-	Music_backup  => "/home_old/Music_backup",
+	home_fbicknel => "/$pool/fbicknel_backup",
+	home_sbicknel => "/$pool/sbicknel_backup",
+	Music_backup  => "/$pool/Music_backup",
 	root          => "/root",
 );
 my $duplProg = "/usr/bin/duplicity";

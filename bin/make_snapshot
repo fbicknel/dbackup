@@ -31,9 +31,10 @@ function cleanup_snapshots () {
 STARTTIME=$(date +%s)
 echo "begin at $(date)."
 SUDO=/usr/bin/sudo
+POOL=backup
 # SUDO="echo"
 SOURCE=${1:-home/fbicknel}
-TARGET=${2:-home_old/fbicknel_backup}
+TARGET=${2:-$pool/fbicknel_backup}
 FORCE_NEW=$3
 echo "Backup from $SOURCE -> $TARGET"
 $SUDO zfs snapshot "${SOURCE}@backup_$(date +%s)" # this is what we're here for
