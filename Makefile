@@ -5,10 +5,12 @@ filelist := $$(cat MANIFEST)
 install: install_bin install_cron install_etc
 
 install_cron:
-	crontab -l | sed -e '/###@duplicity@###/d'| sed -e '$$a30 0 * * * nice -n 19 /root/bin/dbackup >> /var/log/backup/dbackup.out 2>&1 ###@duplicity@###' | crontab -
+	crontab -l | sed -e '/###001duplicity###/d'| sed -e '$$a30 0  * * * nice -n 19 /root/bin/dbackup >> /var/log/backup/dbackup.out 2>&1 ###001duplicity###' | crontab -
+	crontab -l | sed -e '/###002duplicity###/d'| sed -e '$$a30 22 * * * nice -n 19 /root/bin/cleanup >> /var/log/backup/cleanup.out 2>&1 ###002duplicity###' | crontab -
 
 uninstall_cron:
 	crontab -l | sed -e '/###@duplicity@###/d'| crontab -
+	crontab -l | sed -e '/###[0-9][0-9][0-9]duplicity###/d'| crontab -
 
 install_etc:
 	test -d $(prefix)/etc/logrotate.d || mkdir -p $(prefix)/etc/logrotate.d
@@ -33,3 +35,4 @@ uninstall_etc:
 reinstall: uninstall install
 
 .PHONY: install uninstall reinstall install_cron install_bin install_etc uninstall_etc
+

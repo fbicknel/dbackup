@@ -1,0 +1,54 @@
+#!/bin/bash
+
+SEP=********************************
+# echo "Tidy up old dump images"
+date
+echo "Before:"
+df -h
+# ls -ltr /mnt/win/backup/dump
+
+# sudo find /mnt/win/backup/dump -name \*_9_\* -mtime +14 | sudo xargs rm
+day=1
+days=$day
+adder=1
+echo "$SEP$SEP$SEP"
+# for level in _9_ _8_ _7_ _6_ _5_ _4_ _3_ _2_ _1_ _0_; do
+    # echo "$SEP"
+    # let "days = $days + $adder" 
+    # if [ $days -gt 180 ]; then
+        # days=180
+    # fi
+    # echo "Looking for root level $level dumps older than $days days"
+    # find /mnt/win/backup/dump -name \*${level}\* -mtime +$days | xargs --no-run-if-empty --verbose rm
+    # # add | xargs rm when ready to delete
+    # let "adder = $adder + 2"
+# done
+# echo
+# ls -ltr /mnt/win/backup/dump
+
+echo "Tidy up old duplicity images"
+FULLKEEP=5
+INCRKEEP=2
+TEETH=--force # unset this if you want to do a dry run
+for backup_dir in root etc home_fbicknel home_sbicknel Music_backup; do
+    echo "$SEP$SEP$SEP"
+    date
+	echo "Looking for old fulls (more than $FULLKEEP fulls) in backup dir $backup_dir"
+    # echo "$SEP"
+    echo
+	su -c "PASSPHRASE=\"`cat /root/.passwords/dbackup`\" duplicity $TEETH --archive-dir /root/.cache/duplicity remove-all-but-n-full $FULLKEEP file:///mnt/backup/bick-ubtu3/$backup_dir"
+    echo "$SEP"
+	echo "Looking for old incrememtals (more than $INCRKEEP fulls) in backup dir $backup_dir"
+    # echo "$SEP"
+    echo
+	su -c "PASSPHRASE=\"`cat /root/.passwords/dbackup`\" duplicity $TEETH --archive-dir /root/.cache/duplicity remove-all-inc-of-but-n-full $INCRKEEP file:///mnt/backup/bick-ubtu3/$backup_dir"
+    echo "$SEP"
+	echo "Running cleanup in backup dir $backup_dir"
+    # echo "$SEP"
+    echo
+	su -c "PASSPHRASE=\"`cat /root/.passwords/dbackup`\" duplicity $TEETH --archive-dir /root/.cache/duplicity --force --extra-clean cleanup file:///mnt/backup/bick-ubtu3/$backup_dir"
+	echo
+done
+date
+echo "After:"
+df -h
