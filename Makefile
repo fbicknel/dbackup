@@ -14,7 +14,7 @@ uninstall_cron:
 
 install_etc:
 	test -d $(prefix)/etc/logrotate.d || mkdir -p $(prefix)/etc/logrotate.d
-	install -m 0755 etc/logrotate.d/dbackup $(prefix)/etc/logrotate.d
+	install -m 0644 etc/logrotate.d/dbackup $(prefix)/etc/logrotate.d
 
 install_bin:
 	test -d $(prefix)/root/bin || mkdir -p $(prefix)/root/bin
