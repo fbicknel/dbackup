@@ -13,7 +13,8 @@ my $pool = 'backup';
 
 system("/root/bin/make_snapshot home/sbicknel ${pool}/sbicknel_backup");
 system("/root/bin/make_snapshot home/fbicknel ${pool}/fbicknel_backup");
-system("/root/bin/make_snapshot home/Media/Music ${pool}/Music_backup");
+system("/root/bin/make_snapshot vsw/Music ${pool}/Music_backup");
+system("/root/bin/make_snapshot vsw/Pictures ${pool}/Pictures_backup");
 
 my $older_than        = '6D'; # governs when to make full backups
 # If you're looking for cleanup; see ~fbicknel/bin/cleanup
@@ -43,14 +44,12 @@ print $exclFH join ("\n", @excludes);
 $exclFH->seek (0, SEEK_SET);
 
 my %sources = (
-	# tax =>  "/mnt/win/save/Documents\\ and\\ Settings/All\\ Users/Documents/Family/Tax",
-	# pic1 => "/mnt/win/Pictures",
-	# fowin4 => "/mnt/win/save/FOWIN4",
-	etc           => "/etc",
-	home_fbicknel => "/$pool/fbicknel_backup",
-	home_sbicknel => "/$pool/sbicknel_backup",
-	Music_backup  => "/$pool/Music_backup",
-	root          => "/root",
+	etc              => "/etc",
+	home_fbicknel    => "/$pool/fbicknel_backup",
+	home_sbicknel    => "/$pool/sbicknel_backup",
+	Music_backup     => "/$pool/Music_backup",
+	Pictures_backup  => "/$pool/Pictures_backup",
+	root             => "/root",
 );
 my $duplProg = "/usr/bin/duplicity";
 my $method = "file:/";
