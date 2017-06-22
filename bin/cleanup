@@ -30,7 +30,7 @@ echo "Tidy up old duplicity images"
 FULLKEEP=5
 INCRKEEP=2
 TEETH=--force # unset this if you want to do a dry run
-for backup_dir in root etc home_fbicknel home_sbicknel Music_backup; do
+for backup_dir in root etc home_fbicknel home_sbicknel Music_backup Pictures_backup; do
     echo "$SEP$SEP$SEP"
     date
 	echo "Looking for old fulls (more than $FULLKEEP fulls) in backup dir $backup_dir"
