@@ -27,8 +27,8 @@ echo "$SEP$SEP$SEP"
 # ls -ltr /mnt/win/backup/dump
 
 echo "Tidy up old duplicity images"
-FULLKEEP=5
-INCRKEEP=2
+FULLKEEP=6
+INCRKEEP=5
 TEETH=--force # unset this if you want to do a dry run
 for backup_dir in root etc home_fbicknel home_sbicknel Music_backup Pictures_backup; do
     echo "$SEP$SEP$SEP"
