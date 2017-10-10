@@ -23,7 +23,12 @@ function cleanup_snapshots () {
     local SS
     for SS in ${F_SNAPSHOTS[@]:0:$F_LAST_DELETED}; do
         echo "**** Cleaning up snapshot: $F_FIRST_SNAPSHOT (# $F_N)"
-        $SUDO zfs destroy $SS
+        if [ -n "$DRY_RUN" ]; then
+            echo "(dry-run)"
+            echo zfs destroy $SS
+        else
+            $SUDO zfs destroy $SS
+        fi
         let F_N=${F_N}-1
     done
 }
@@ -31,19 +36,66 @@ function cleanup_snapshots () {
 STARTTIME=$(date +%s)
 echo "begin at $(date)."
 SUDO=/usr/bin/sudo
-POOL=backup
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -f|--force-full)
+        FORCE_NEW="-new"
+        shift # past argument
+        ;;
+    -p|--pool)
+        POOL="$2"
+        shift
+        shift
+        ;;
+    -l|--use-last)
+        USE_LAST_SNAPSHOT=1
+        shift # past argument
+        ;;
+    -d|--dry-run)
+        DRY_RUN=1
+        shift;
+        ;;
+    *)    # unknown option
+        POSITIONAL+=("$1") # save it in an array for later
+        shift # past argument
+        ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+: ${POOL:=backup} #default is backup
 # SUDO="echo"
 SOURCE=${1:-home/fbicknel}
-TARGET=${2:-$pool/fbicknel_backup}
-FORCE_NEW=$3
+TARGET=${2:-$POOL/fbicknel_backup}
+if [ -n "$FORCE_NEW" -a -n "$USE_LAST_SNAPSHOT" ]; then
+    echo "You can't try to force a new full and say use the last snapshot"
+    echo "--force-full and --use-last are mutually exclusive"
+    exit 1
+fi
+
 echo "Backup from $SOURCE -> $TARGET"
-$SUDO zfs snapshot "${SOURCE}@backup_$(date +%s)" # this is what we're here for
+if [ "$USE_LAST_SNAPSHOT" == 1 ]; then
+    echo "We are using the last incremental snapshot."
+else
+    if [ -n "$DRY_RUN" ]; then
+        echo "(dry-run)"
+        echo zfs snapshot "${SOURCE}@backup_$(date +%s)" 
+    else
+        $SUDO zfs snapshot "${SOURCE}@backup_$(date +%s)" # this is what we're here for
+    fi
+fi
 # First targets:
 T_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $TARGET | awk '/backup_[0-9]/ {print $1}'))
 TF_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $TARGET | awk '/backup_F_[0-9]/ {print $1}'))
 
 # Now sources;
 S_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $SOURCE | awk '/backup_[0-9]/ {print $1}'))
+if [ "$USE_LAST_SNAPSHOT" == 1 ]; then
+    echo "The last incremental snapshot was: ${S_SNAPSHOTS[-1]}"
+fi
 SF_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $SOURCE | awk '/backup_F_[0-9]/ {print $1}'))
 SF_SNAPSHOT_QTY=${#SF_SNAPSHOTS[@]}
 TF_SNAPSHOT_QTY=${#TF_SNAPSHOTS[@]}
@@ -68,28 +120,58 @@ if [ "$FORCE_NEW" = '-new' -o $T_SNAPSHOT_QTY -eq 0 \
     AT_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $TARGET | awk '{print $1}'))
     cleanup_snapshots AT_SNAPSHOTS[@] 0
     echo -e "\tRemoving target ($TARGET)..."
-    $SUDO zfs destroy $TARGET
+    if [ -n "$DRY_RUN" ]; then
+        echo "(dry-run)"
+        echo zfs destroy $TARGET
+    else
+        $SUDO zfs destroy $TARGET
+    fi
     echo -e "\tCreate new snapshot on source ($SOURCE)"
     # Note the _F_ in the snapshot name: this denotes the 'full' progenitor
-    $SUDO zfs snapshot "${SOURCE}@backup_F_$(date +%s)" # this is what we're here for
+    if [ -n "$DRY_RUN" ]; then
+        echo zfs snapshot "${SOURCE}@backup_F_$(date +%s)" 
+        echo "(dry-run)"
+    else
+        $SUDO zfs snapshot "${SOURCE}@backup_F_$(date +%s)" # this is what we're here for
+    fi
     S_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $SOURCE | awk '/backup_/ {print $1}'))
     echo -e "\tSending first full snapshot"
-    $SUDO zfs send ${S_SNAPSHOTS[0]} | $SUDO zfs receive -F $TARGET
-    RV=$?
+    if [ -n "$DRY_RUN" ]; then
+        echo "(dry-run)"
+        echo "zfs send ${S_SNAPSHOTS[0]} | $SUDO zfs receive -F $TARGET"
+        RV=0
+    else
+        $SUDO zfs send ${S_SNAPSHOTS[0]} | $SUDO zfs receive -F $TARGET
+        RV=$?
+    fi
 else
     T_KEEP=5
     echo "Clean up target snapshots:"
+    if [ -n "$DRY_RUN" ]; then
+        echo "(dry-run)"
+        echo cleanup_snapshots T_SNAPSHOTS[@] $T_KEEP
+    fi
     cleanup_snapshots T_SNAPSHOTS[@] $T_KEEP
     S_KEEP=5
     echo "Clean up source snapshots:"
+    if [ -n "$DRY_RUN" ]; then
+        echo "(dry-run)"
+        echo cleanup_snapshots S_SNAPSHOTS[@] $S_KEEP
+    fi
     cleanup_snapshots S_SNAPSHOTS[@] $S_KEEP
     SF_SNAPSHOTS=($($SUDO zfs list -Ht snapshot -r $SOURCE | awk '/backup_F_/ {print $1}'))
     S_FULL_SNAPSHOT=${SF_SNAPSHOTS[-1]}
     S_LAST_SNAPSHOT=${S_SNAPSHOTS[-1]}
     let S_LAST_DELETED=$S_SNAPSHOT_QTY-$S_KEEP
     echo "Sending incremental snapshot data from $S_FULL_SNAPSHOT..$S_LAST_SNAPSHOT to $TARGET"
-    $SUDO zfs send -i $S_FULL_SNAPSHOT $S_LAST_SNAPSHOT | $SUDO zfs receive -F $TARGET
-    RV=$?
+    if [ -n "$DRY_RUN" ]; then
+        echo "(dry-run)"
+        echo "zfs send -i $S_FULL_SNAPSHOT $S_LAST_SNAPSHOT | zfs receive -F $TARGET"
+        RV=0
+    else
+        $SUDO zfs send -i $S_FULL_SNAPSHOT $S_LAST_SNAPSHOT | $SUDO zfs receive -F $TARGET
+        RV=$?
+    fi
 fi
 ENDTIME=$(date +%s)
 echo "done at $(date). $(($ENDTIME - $STARTTIME)) elapsed seconds"
