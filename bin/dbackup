@@ -5,6 +5,7 @@ use v5.10;
 
 my $VERSION = '0.7';
 
+use Config::Simple;
 use Cwd qw(realpath);
 use File::Basename;
 use File::Temp qw/ :seekable /;
@@ -21,7 +22,7 @@ $docs           = realpath($docs); # clean up the path while we're still root
 
 my $opt = {};
 my @opt = qw(help man older-than=s exclude-source=s@ list-sources 
-    dry-run verbose include-source=s% snapshot! pool=s version);
+    dry-run verbose include-source=s% snapshot! pool=s version file=s);
 GetOptions($opt, @opt) or pod2usage(
     -input      => $docs,
     -verbose    => 2,
@@ -39,6 +40,13 @@ if ($opt->{version}) {
     say "$VERSION";
     exit 0;
 }
+$opt->{file} ||= "/etc/dbackup.d/dbackup.conf";
+my $cfg = new Config::Simple($opt->{file});
+die "No configuration when read from $opt->{file}: $!\n" unless $cfg;
+my $sourcelist = $cfg->param(-block => 'Backup')->{Sources};
+my $older_than = $opt->{'older-than'} || $cfg->param(-block => 'Backup')->{FullIfOlderThan} || '6D';
+my $passfile   = $cfg->param(-block => 'Backup')->{Passphrase} || '/root/.passwords/dbackup';
+
 $opt->{snapshot} = 1 unless defined $opt->{snapshot};
 if (defined $opt->{"include-source"} and defined $opt->{"exclude-source"}) {
     die "you can only specify one or the other of include-source and exclude-source.\n";
@@ -46,6 +54,9 @@ if (defined $opt->{"include-source"} and defined $opt->{"exclude-source"}) {
 my $source_exclude = {};
 if ($opt->{"exclude-source"}) {
     @$source_exclude{@{$opt->{"exclude-source"}}} = undef;
+} else {
+    my $excludes = $cfg->param(-block => 'Backup')->{Excludes};
+    @$source_exclude{@$excludes} = undef;
 }
 
 my $pool = $opt->{pool} || 'backup';
@@ -69,7 +80,6 @@ if ($opt->{"list-sources"}) {
     exit 0;
 }
 
-# TODO: add --pool and --dry-run to command line options for make_snapshot
 # FIXME: why is path to make_snapshot hard-coded?
 if (not $opt->{"dry-run"} and $opt->{snapshot}) {
     say "Making current snapshots for targets:";
@@ -81,7 +91,6 @@ if (not $opt->{"dry-run"} and $opt->{snapshot}) {
     say "Snapshot phase skipped.";
 }
 
-my $older_than           = $opt->{"older-than"} || '6D';
 # If you are looking for cleanup; see ~fbicknel/bin/cleanup
 my $duplicity_options = "";
 my $target_host = "bick-ubtu3";
@@ -113,7 +122,7 @@ if ($target_host ne hostname ()) {
 }
 my $PASSPHRASE = '******';
 unless ($opt->{"dry-run"}) {
-    $PASSPHRASE = `cat /root/.passwords/dbackup`;
+    $PASSPHRASE = `/bin/cat $passfile`;
     chomp $PASSPHRASE;
     die "No passphrase or passphrase file!\n" unless $PASSPHRASE;
 }
