@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use v5.10;
 
-my $VERSION = '0.7';
+my $VERSION = '0.8';
 
 use Cwd qw(realpath);
 use File::Basename;
