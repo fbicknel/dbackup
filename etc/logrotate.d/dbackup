@@ -6,7 +6,7 @@
 	missingok
 	notifempty
 	delaycompress
-	compress
+	# compress
 	endscript
 }
 
