@@ -5,7 +5,7 @@ filelist := $$(cat MANIFEST)
 install: install_bin install_cron install_etc
 
 install_cron:
-	crontab -l | sed -e '/###001duplicity###/d'| sed -e '$$a30 0  * * * nice -n 19 /root/bin/dbackup >> /var/log/backup/dbackup.out 2>&1 ###001duplicity###' | crontab -
+	crontab -l | sed -e '/###001duplicity###/d'| sed -e '$$a30 0  * * * nice -n 19 /root/bin/dbackup --older-than 6D >> /var/log/backup/dbackup.out 2>&1 ###001duplicity###' | crontab -
 	crontab -l | sed -e '/###002duplicity###/d'| sed -e '$$a30 22 * * * nice -n 19 /root/bin/cleanup >> /var/log/backup/cleanup.out 2>&1 ###002duplicity###' | crontab -
 
 uninstall_cron:

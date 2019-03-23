@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use v5.10;
 
-my $VERSION = '0.7';
+my $VERSION = '0.8';
 
 use Cwd qw(realpath);
 use File::Basename;
@@ -51,8 +51,8 @@ if ($opt->{"exclude-source"}) {
 my $pool = $opt->{pool} || 'backup';
 my %sources = (
 	etc              => "/etc",
+	home             => "/$pool/home_backup",
 	home_fbicknel    => "/$pool/fbicknel_backup",
-	home_sbicknel    => "/$pool/sbicknel_backup",
 	Music_backup     => "/$pool/Music_backup",
 	Pictures_backup  => "/$pool/Pictures_backup",
 	root             => "/root",
@@ -73,7 +73,7 @@ if ($opt->{"list-sources"}) {
 # FIXME: why is path to make_snapshot hard-coded?
 if (not $opt->{"dry-run"} and $opt->{snapshot}) {
     say "Making current snapshots for targets:";
-    system("/root/bin/make_snapshot home/sbicknel ${pool}/sbicknel_backup");
+    system("/root/bin/make_snapshot home ${pool}/home_backup");
     system("/root/bin/make_snapshot home/fbicknel ${pool}/fbicknel_backup");
     system("/root/bin/make_snapshot vsw/Music ${pool}/Music_backup");
     system("/root/bin/make_snapshot vsw/Pictures ${pool}/Pictures_backup");
