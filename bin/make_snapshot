@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+function version () {
+    echo "Version: 0.9"
+}
+
 function cleanup_snapshots () {
     declare -a F_SNAPSHOTS=("${!1}")
     local F_KEEP=$2
@@ -94,6 +98,10 @@ case $key in
     -l|--use-last)
         USE_LAST_SNAPSHOT=1
         shift # past argument
+        ;;
+    -v|--version)
+        version()
+        exit 0
         ;;
     -d|--dry-run)
         DRY_RUN=1
