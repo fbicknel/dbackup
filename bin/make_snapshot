@@ -4,10 +4,25 @@ function version () {
     echo "Version: 0.9"
 }
 
+function cdate2date () {
+    local cdate=$(echo $1 | sed -e 's/.*_\(.*\)/\1/')
+    if [ -n "$cdate" ]; then
+        date -d @$cdate
+    else
+        echo "no date?"
+        return -1
+    fi
+}
+
 function cleanup_snapshots () {
-    declare -a F_SNAPSHOTS=("${!1}")
+    local F_UNSORT_SNAPSHOTS=("${!1}")
+    local F_SNAPSHOTS=($(shuf -e ${F_UNSORT_SNAPSHOTS[@]}|sort))
     local F_KEEP=$2
     local F_SNAPSHOT_QTY=${#F_SNAPSHOTS[@]}
+    if [ -n "$DEBUG" ]; then
+        echo "F_UNSORT_SNAPSHOTS: ${F_UNSORT_SNAPSHOTS[@]}"
+        echo "F_SNAPSHOTS: ${F_SNAPSHOTS[@]}"
+    fi
     if [ $F_SNAPSHOT_QTY -eq 0 ]; then
         echo "No snapshots to clean up."
         return
@@ -25,8 +40,14 @@ function cleanup_snapshots () {
     let F_LAST_DELETED=$F_SNAPSHOT_QTY-$F_KEEP
     local F_N=$F_LAST_DELETED
     local SS
+    if [ -n "$DEBUG" ]; then
+        echo "F_FIRST_SNAPSHOT: ${F_FIRST_SNAPSHOT[@]}"
+        echo "F_LAST_SNAPSHOT: ${F_LAST_SNAPSHOT[@]}"
+        echo "F_LAST_DELETED: $F_LAST_DELETED"
+    fi
     for SS in ${F_SNAPSHOTS[@]:0:$F_LAST_DELETED}; do
-        echo "**** Cleaning up snapshot: $F_FIRST_SNAPSHOT (# $F_N)"
+        local DATE=$(cdate2date $SS)
+        echo "**** Cleaning up snapshot: $SS ($DATE)"
         if [ -n "$DRY_RUN" ]; then
             echo "(dry-run)"
             echo zfs destroy $SS
