@@ -100,7 +100,7 @@ case $key in
         shift # past argument
         ;;
     -v|--version)
-        version()
+        version
         exit 0
         ;;
     -d|--dry-run)
