@@ -1,35 +1,63 @@
 #!/usr/bin/env bash
 
+function version () {
+    echo "Version: 0.9"
+}
+
+function cdate2date () {
+    local cdate=$(echo $1 | sed -e 's/.*_\(.*\)/\1/')
+    if [ -n "$cdate" ]; then
+        date -d @$cdate
+    else
+        echo "no date?" >&2
+        return -1
+    fi
+}
+
 function cleanup_snapshots () {
-    declare -a F_SNAPSHOTS=("${!1}")
-    local F_KEEP=$2
-    local F_SNAPSHOT_QTY=${#F_SNAPSHOTS[@]}
-    if [ $F_SNAPSHOT_QTY -eq 0 ]; then
+    local C_SNAPSHOTS=("${!1}")
+    local C_KEEP=$2
+    local C_LABEL=$3
+    local C_SNAPSHOT_QTY=${#C_SNAPSHOTS[@]}
+    if [ -n "$DEBUG" ]; then
+        echo "C_UNSORT_SNAPSHOTS: ${C_UNSORT_SNAPSHOTS[@]}"
+        echo "C_SNAPSHOTS: ${C_SNAPSHOTS[@]}"
+    fi
+    if [ $C_SNAPSHOT_QTY -eq 0 ]; then
         echo "No snapshots to clean up."
         return
     fi
-    echo "Found $F_SNAPSHOT_QTY incremental snapshots. Clean up until $F_KEEP remain..."
-    if [ $F_SNAPSHOT_QTY -lt $F_KEEP ]; then
-        echo "Not enough snapshots to clean up (need at least $F_KEEP)"
+    echo "Found $C_SNAPSHOT_QTY ${C_LABEL} snapshots. Clean up until $C_KEEP remain..."
+    if [ $C_SNAPSHOT_QTY -lt $C_KEEP ]; then
+        echo "Not enough snapshots to clean up (need at least $C_KEEP)"
         return
     fi
     # from  the array of snapshots we were given, we're going to want the
     # first (oldest), and last (newest) one
-    local F_FIRST_SNAPSHOT=${F_SNAPSHOTS[0]}
-    local F_LAST_SNAPSHOT=${F_SNAPSHOTS[-1]}
-    local F_LAST_DELETED
-    let F_LAST_DELETED=$F_SNAPSHOT_QTY-$F_KEEP
-    local F_N=$F_LAST_DELETED
+    local C_FIRST_SNAPSHOT=${C_SNAPSHOTS[0]}
+    local C_LAST_SNAPSHOT=${C_SNAPSHOTS[-1]}
+    local C_LAST_DELETED
+    let C_LAST_DELETED=$C_SNAPSHOT_QTY-$C_KEEP
+    local C_N=$C_LAST_DELETED
     local SS
-    for SS in ${F_SNAPSHOTS[@]:0:$F_LAST_DELETED}; do
-        echo "**** Cleaning up snapshot: $F_FIRST_SNAPSHOT (# $F_N)"
+    if [ -n "$DEBUG" ]; then
+        echo "C_FIRST_SNAPSHOT: ${C_FIRST_SNAPSHOT[@]}"
+        for shot in "${C_SNAPSHOTS[@]}"; do
+            echo $shot
+        done
+        echo "C_LAST_SNAPSHOT: ${C_LAST_SNAPSHOT[@]}"
+        echo "C_LAST_DELETED: $C_LAST_DELETED"
+    fi
+    for SS in ${C_SNAPSHOTS[@]:0:$C_LAST_DELETED}; do
+        local DATE=$(cdate2date $SS)
+        echo "**** Cleaning up snapshot: $SS ($DATE)"
         if [ -n "$DRY_RUN" ]; then
             echo "(dry-run)"
             echo zfs destroy $SS
         else
             $SUDO zfs destroy $SS
         fi
-        let F_N=${F_N}-1
+        let C_N=${C_N}-1
     done
 }
 
@@ -39,11 +67,11 @@ function get_snapshot_listing () {
 
 function send_first_full_snapshot () {
     echo -e "\tRemoving all source _backup snapshots"
-    SI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_" } $0~p {print $1}'))
-    cleanup_snapshots SI_SNAPSHOTS[@] 0
+    SI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_" } $0~p {print $1}'|sort))
+    cleanup_snapshots SI_SNAPSHOTS[@] 0 "incremental source"
     echo -e "\tRemoving all target snapshots (ALL)"
-    AT_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$TARGET'" } $0~p {print $1}'))
-    cleanup_snapshots AT_SNAPSHOTS[@] 0
+    AT_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$TARGET'" } $0~p {print $1}'|sort))
+    cleanup_snapshots AT_SNAPSHOTS[@] 0 "target"
     echo -e "\tRemoving target ($TARGET)..."
     if [ -n "$DRY_RUN" ]; then
         echo "(dry-run)"
@@ -61,7 +89,7 @@ function send_first_full_snapshot () {
         $SUDO zfs snapshot "${SOURCE}@backup_F_$(date +%s)" # this is what we're here for
     fi
     get_snapshot_listing
-    SI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_" } $0~p {print $1}'))
+    SI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_" } $0~p {print $1}'|sort))
     echo -e "\tSending first full snapshot"
     if [ -n "$DRY_RUN" ]; then
         echo "(dry-run)"
@@ -94,6 +122,10 @@ case $key in
     -l|--use-last)
         USE_LAST_SNAPSHOT=1
         shift # past argument
+        ;;
+    -v|--version)
+        version
+        exit 0
         ;;
     -d|--dry-run)
         DRY_RUN=1
@@ -129,19 +161,19 @@ else
 fi
 # First targets:
 get_snapshot_listing
-TI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$TARGET'@backup_[0-9]"   } $0~p {print $1}'))
-TF_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$TARGET'@backup_F_[0-9]" } $0~p {print $1}'))
+TI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$TARGET'@backup_[0-9]"   } $0~p {print $1}'|sort))
+TF_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$TARGET'@backup_F_[0-9]" } $0~p {print $1}'|sort))
 if [ -n "$DEBUG" ]; then
     echo "TI: ${TI_SNAPSHOTS[@]}"
     echo "TF: ${TF_SNAPSHOTS[@]}"
 fi
 
 # Now sources;
-SI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_[0-9]" } $0~p {print $1}'))
+SI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_[0-9]" } $0~p {print $1}'|sort))
 if [ "$USE_LAST_SNAPSHOT" == 1 ]; then
     echo "The last incremental snapshot was: ${SI_SNAPSHOTS[-1]}"
 fi
-SF_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_F_[0-9]" } $0~p {print $1}'))
+SF_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_F_[0-9]" } $0~p {print $1}'|sort))
 if [ -n "$DEBUG" ]; then
     echo "SI: ${SI_SNAPSHOTS[@]}"
     echo "SF: ${SF_SNAPSHOTS[@]}"
@@ -169,18 +201,18 @@ else
     echo "Clean up target snapshots:"
     if [ -n "$DRY_RUN" ]; then
         echo "(dry-run)"
-        echo cleanup_snapshots TI_SNAPSHOTS[@] $T_KEEP
+        echo cleanup_snapshots TI_SNAPSHOTS[@] $T_KEEP "target incremental"
     fi
-    cleanup_snapshots TI_SNAPSHOTS[@] $T_KEEP
+    cleanup_snapshots TI_SNAPSHOTS[@] $T_KEEP "target incremental"
     S_KEEP=5
     echo "Clean up source snapshots:"
     if [ -n "$DRY_RUN" ]; then
         echo "(dry-run)"
-        echo cleanup_snapshots SI_SNAPSHOTS[@] $S_KEEP
+        echo cleanup_snapshots SI_SNAPSHOTS[@] $S_KEEP "source incremental"
     fi
-    cleanup_snapshots SI_SNAPSHOTS[@] $S_KEEP
+    cleanup_snapshots SI_SNAPSHOTS[@] $S_KEEP "source incremental"
     get_snapshot_listing
-    SF_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_F_" } $0~p {print $1}'))
+    SF_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_F_" } $0~p {print $1}'|sort))
     S_FULL_SNAPSHOT=${SF_SNAPSHOTS[-1]}
     S_LAST_SNAPSHOT=${SI_SNAPSHOTS[-1]}
     let S_LAST_DELETED=$SI_SNAPSHOT_QTY-$S_KEEP
