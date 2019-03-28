@@ -1,3 +1,4 @@
 bin/cleanup
 bin/dbackup
 bin/make_snapshot
+etc/borg/patterns
