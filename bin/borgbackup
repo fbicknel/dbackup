@@ -30,18 +30,26 @@ elif [ "$1" == 'list' ]; then
     exit
 else
     info "Starting backup"
-    BACKUP_TARGETS=(SOURCE                   \
-                    SOURCE                   \
-                    /backup/fbicknel_backup  \
-                    /backup/Pictures_backup  \
-                    /backup/Music_backup     \
+    BACKUP_TARGETS=(SOURCE                         \
+                    SOURCE                         \
+                    /backup/rpool_usr_backup       \
+                    /backup/rpool_var_backup       \
+                    /backup/rpool_usr_local_backup \
+                    /backup/gnote_backup           \
+                    /backup/fbicknel_backup        \
+                    /backup/Pictures_backup        \
+                    /backup/Music_backup           \
                     )
 
-    BACKUP_SOURCES=(/root                    \
-                    /etc                     \
-                    /home/fbicknel           \
-                    /vsw/Pictures            \
-                    /vsw/Music               \
+    BACKUP_SOURCES=(/root                          \
+                    /etc                           \
+                    /rpool/usr                     \
+                    /rpool/var                     \
+                    /rpool/usr/local               \
+                    /rpool/gnote                   \
+                    /home/fbicknel                 \
+                    /vsw/Pictures                  \
+                    /vsw/Music                     \
                     )
     for i in $(seq 0 4); do
         # echo $i
