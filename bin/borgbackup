@@ -23,23 +23,53 @@ if [ "$1" == 'init' ]; then
         --encryption repokey-blake2     \
         --make-parent-dirs              \
 
+elif [ "$1" == 'list' ]; then
+    shift
+    info "Listing repository"
+    borg list $@
+    exit
 else
     info "Starting backup"
-    borg create                      \
-        --verbose                    \
-        --stats                      \
-        --list                       \
-        --show-rc                    \
-        --compression lz4            \
-        --patterns-from /var/tmp/patterns \
-        ::'{hostname}-{now}'         \
-        /etc                         \
+    BACKUP_TARGETS=(SOURCE                   \
+                    SOURCE                   \
+                    /backup/fbicknel_backup  \
+                    /backup/Pictures_backup  \
+                    /backup/Music_backup     \
+                    )
 
-        # /backup/fbicknel_backup  \
-        # /backup/Pictures_backup  \
-        # /backup/Music_backup     \
-        # /root                    \
+    BACKUP_SOURCES=(/root                    \
+                    /etc                     \
+                    /home/fbicknel           \
+                    /vsw/Pictures            \
+                    /vsw/Music               \
+                    )
+    for i in $(seq 0 4); do
+        # echo $i
+        TARGET=${BACKUP_TARGETS[$i]}
+        SOURCE=${BACKUP_SOURCES[$i]}
+        # echo "s: $SOURCE t: $TARGET"
+        ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
+        # echo "a: $ARCHIVE"
+        if [ "$1" == "nosnapshot" ]; then
+            :
+        else
+            if [ "$TARGET" != "SOURCE" ]; then
+                make_snapshot $SOURCE $TARGET
+            else
+                TARGET=$SOURCE
+            fi
+        fi
+        borg create                      \
+            --verbose                    \
+            --stats                      \
+            --list                       \
+            --show-rc                    \
+            --compression lz4            \
+            --exclude-from /var/tmp/patterns \
+            ::'{hostname}-'${ARCHIVE}'-{now}'         \
+            ${TARGET}                 \
 
+    done
 fi
 
 backup_exit=$?
@@ -62,6 +92,8 @@ else
         --list                          \
         --prefix '{hostname}-'          \
         --show-rc                       \
+        --stats                         \
+        --keep-within 2d                \
         --keep-daily    7               \
         --keep-weekly   4               \
         --keep-monthly  6               \
