@@ -57,12 +57,14 @@ else
         SOURCE=${BACKUP_SOURCES[$i]}
         # echo "s: $SOURCE t: $TARGET"
         ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
+        SNAP_TARGET=$(echo $TARGET|cut -b 2-)
+        SNAP_SOURCE=$(echo $SOURCE|cut -b 2-)
         # echo "a: $ARCHIVE"
         if [ "$1" == "nosnapshot" ]; then
             :
         else
             if [ "$TARGET" != "SOURCE" ]; then
-                make_snapshot $SOURCE $TARGET
+                /root/bin/make_snapshot $SNAP_SOURCE $SNAP_TARGET
             else
                 TARGET=$SOURCE
             fi
