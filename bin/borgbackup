@@ -32,8 +32,6 @@ else
     info "Starting backup"
     BACKUP_TARGETS=(SOURCE                         \
                     SOURCE                         \
-                    /backup/rpool_usr_backup       \
-                    /backup/rpool_var_backup       \
                     /backup/rpool_usr_local_backup \
                     /backup/gnote_backup           \
                     /backup/fbicknel_backup        \
@@ -43,15 +41,27 @@ else
 
     BACKUP_SOURCES=(/root                          \
                     /etc                           \
-                    /rpool/usr                     \
-                    /rpool/var                     \
                     /rpool/usr/local               \
                     /rpool/gnote                   \
                     /home/fbicknel                 \
                     /vsw/Pictures                  \
                     /vsw/Music                     \
                     )
-    for i in $(seq 0 4); do
+    BACKUP_TARGETS_LEN=$((${#BACKUP_TARGETS[@]} - 1))
+    BACKUP_SOURCES_LEN=$((${#BACKUP_SOURCES[@]} - 1))
+    if [ $BACKUP_TARGETS_LEN -ne $BACKUP_SOURCES_LEN -o
+        $BACKUP_TARGETS_LEN -lt 1 ]; then
+        echo "Invalid list of TARGETS and/or SOURCES."
+        echo "these lists should be the same length"
+        echo "and a non-empty list."
+        exit 9
+    fi
+    if [ $BACKUP_TARGETS_LEN -gt 50 ]; then
+        echo "Seems like something's wrong. I thought you said we"
+        echo "have a list of ${BACKUP_TARGETS_LEN} entites to back up??"
+        exit 1
+    fi
+    for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
         # echo $i
         TARGET=${BACKUP_TARGETS[$i]}
         SOURCE=${BACKUP_SOURCES[$i]}
@@ -69,15 +79,15 @@ else
                 TARGET=$SOURCE
             fi
         fi
-        borg create                      \
-            --verbose                    \
-            --stats                      \
-            --list                       \
-            --show-rc                    \
-            --compression lz4            \
-            --exclude-from /var/tmp/patterns \
-            ::'{hostname}-'${ARCHIVE}'-{now}'         \
-            ${TARGET}                 \
+        borg create                           \
+            --verbose                         \
+            --stats                           \
+            --list                            \
+            --show-rc                         \
+            --compression lz4                 \
+            --exclude-from /etc/borg/patterns \
+            ::'{hostname}-'${ARCHIVE}'-{now}' \
+            ${TARGET}                         \
 
     done
 fi
