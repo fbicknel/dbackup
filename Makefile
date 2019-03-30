@@ -5,7 +5,7 @@ filelist := $$(cat MANIFEST)
 install: install_bin install_cron install_etc
 
 install_cron:
-	crontab -l | sed -e '/###001borg###/d'| sed -e '$$a30 0  * * * nice -n 19 /root/bin/borgbackup >> /var/log/backup/borgbackup.out 2>&1 ###001borg###' | crontab -
+	crontab -l | sed -e '/###001borg###/d'| sed -e '$$a30 0  * * * nice -n 19 /root/bin/borgbackup >> /var/log/backup/borgbackup.log 2>&1 ###001borg###' | crontab -
 
 uninstall_cron:
 	crontab -l | sed -e '/###@borg@###/d'| crontab -
