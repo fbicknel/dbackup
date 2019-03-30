@@ -49,7 +49,7 @@ else
                     )
     BACKUP_TARGETS_LEN=$((${#BACKUP_TARGETS[@]} - 1))
     BACKUP_SOURCES_LEN=$((${#BACKUP_SOURCES[@]} - 1))
-    if [ $BACKUP_TARGETS_LEN -ne $BACKUP_SOURCES_LEN -o
+    if [ $BACKUP_TARGETS_LEN -ne $BACKUP_SOURCES_LEN -o \
         $BACKUP_TARGETS_LEN -lt 1 ]; then
         echo "Invalid list of TARGETS and/or SOURCES."
         echo "these lists should be the same length"
