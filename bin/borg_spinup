@@ -1,0 +1,7 @@
+# 
+# Source this if you need to use borg from the command line
+#
+export BORG_REPO='/mnt/backup/borgbackup'
+export BORG_CACHE_DIR='/root/.cache'
+export BORG_CONFIG_DIR='/root/.config/borg'
+export BORG_PASSCOMMAND='cat /root/.passwords/borgbackup-prod'
