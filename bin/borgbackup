@@ -1,5 +1,9 @@
 #!/bin/bash
 
+function version () {
+    echo "Version: $(/bin/cat /etc/borgbackup/version)"
+}
+
 # Setting this, so the repo does not need to be given on the commandline:
 # export BORG_REPO=ssh://username@example.com:2022/~/backup/main
 export BORG_REPO='/mnt/backup/borgbackup'
