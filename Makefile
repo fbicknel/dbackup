@@ -16,6 +16,7 @@ install_etc:
 	test -d $(prefix)/etc/borg || mkdir -p $(prefix)/etc/borg
 	install -o root -g adm -m 0640 etc/logrotate.d/borgbackup $(prefix)/etc/logrotate.d
 	install -o root -g adm -m 0640 etc/patterns $(prefix)/etc/borg
+	install -o root -g adm -m 0640 etc/version $(prefix)/etc/borg
 	mkdir --parents --mode=700 /var/log/backup
 
 install_bin:
