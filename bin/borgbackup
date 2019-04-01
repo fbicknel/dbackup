@@ -32,7 +32,11 @@ elif [ "$1" == 'list' ]; then
     info "Listing repository $@"
     borg list $@
     exit
+elif [ "$1" == 'version' -o "$1" == '--version' ]; then
+    info "borgbackup Version $(version)"
+    exit
 else
+    info "borgbackup Version $(version)"
     info "Starting backup"
     BACKUP_TARGETS=(SOURCE                         \
                     SOURCE                         \
