@@ -118,7 +118,7 @@ else
 
     borg prune                          \
         --list                          \
-        --prefix '{hostname}-'          \
+        --glob-archives '{hostname}-*-'          \
         --show-rc                       \
         --stats                         \
         --keep-daily    7               \
