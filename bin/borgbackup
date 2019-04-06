@@ -19,31 +19,6 @@ info() { printf "\n%s %s\n\n" "$(date)" "$*" >&2; }
 
 trap 'echo $(date) Backup interrupted >&2; exit 2' INT TERM
 MAKE_SS=Y # default to make a snapshot
-
-if [ "$1" == 'init' ]; then
-    info "Setting up repository"
-    borg                                \
-        --verbose                       \
-        init                            \
-        --encryption repokey-blake2     \
-        --make-parent-dirs              \
-    exit
-elif [ "$1" == 'list' ]; then
-    shift
-    info "Listing repository $@"
-    borg list $@
-    exit
-elif [ "$1" == 'version' -o "$1" == '--version' ]; then
-    info "borgbackup Version $(version)"
-    exit
-elif [ "$1" == 'nosnapshot' ]; then
-    unset MAKE_SS
-fi
-info "borgbackup Version $(version)"
-if [ -z "$MAKE_SS" ]; then
-    info "Not creating new snapshots."
-fi
-info "Starting backup"
 BACKUP_TARGETS=(SOURCE                         \
                 SOURCE                         \
                 /backup/rpool_usr_local_backup \
@@ -63,6 +38,41 @@ BACKUP_SOURCES=(/root                          \
                 )
 BACKUP_TARGETS_LEN=$((${#BACKUP_TARGETS[@]} - 1))
 BACKUP_SOURCES_LEN=$((${#BACKUP_SOURCES[@]} - 1))
+
+if [ "$1" == 'init' ]; then
+    info "Setting up repository"
+    borg                                \
+        --verbose                       \
+        init                            \
+        --encryption repokey-blake2     \
+        --make-parent-dirs              \
+    exit
+elif [ "$1" == 'list' ]; then
+    shift
+    info "Listing repository $@"
+    borg list $@
+    exit
+elif [ "$1" == 'listarchives' ]; then
+    shift
+    info "Listing repository by archives"
+    for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
+        SOURCE=${BACKUP_SOURCES[$i]}
+        ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
+        info "Listing archive ${ARCHIVE}"
+        borg list --glob-archives "*-${ARCHIVE}-*"
+    done
+    exit
+elif [ "$1" == 'version' -o "$1" == '--version' ]; then
+    info "borgbackup Version $(version)"
+    exit
+elif [ "$1" == 'nosnapshot' ]; then
+    unset MAKE_SS
+fi
+info "borgbackup Version $(version)"
+if [ -z "$MAKE_SS" ]; then
+    info "Not creating new snapshots."
+fi
+info "Starting backup"
 if [ $BACKUP_TARGETS_LEN -ne $BACKUP_SOURCES_LEN -o \
     $BACKUP_TARGETS_LEN -lt 1 ]; then
     echo "Invalid list of TARGETS and/or SOURCES."
@@ -79,7 +89,6 @@ for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
     # echo $i
     TARGET=${BACKUP_TARGETS[$i]}
     SOURCE=${BACKUP_SOURCES[$i]}
-    # echo "s: $SOURCE t: $TARGET"
     ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
     SNAP_TARGET=$(echo $TARGET|cut -b 2-)
     SNAP_SOURCE=$(echo $SOURCE|cut -b 2-)
