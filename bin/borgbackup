@@ -18,6 +18,7 @@ export BORG_PASSCOMMAND='cat /root/.passwords/borgbackup-prod'
 info() { printf "\n%s %s\n\n" "$(date)" "$*" >&2; }
 
 trap 'echo $(date) Backup interrupted >&2; exit 2' INT TERM
+MAKE_SS=Y # default to make a snapshot
 
 if [ "$1" == 'init' ]; then
     info "Setting up repository"
@@ -26,7 +27,7 @@ if [ "$1" == 'init' ]; then
         init                            \
         --encryption repokey-blake2     \
         --make-parent-dirs              \
-
+    exit
 elif [ "$1" == 'list' ]; then
     shift
     info "Listing repository $@"
@@ -35,70 +36,71 @@ elif [ "$1" == 'list' ]; then
 elif [ "$1" == 'version' -o "$1" == '--version' ]; then
     info "borgbackup Version $(version)"
     exit
-else
-    info "borgbackup Version $(version)"
-    info "Starting backup"
-    BACKUP_TARGETS=(SOURCE                         \
-                    SOURCE                         \
-                    /backup/rpool_usr_local_backup \
-                    /backup/gnote_backup           \
-                    /backup/fbicknel_backup        \
-                    /backup/Pictures_backup        \
-                    /backup/Music_backup           \
-                    )
-
-    BACKUP_SOURCES=(/root                          \
-                    /etc                           \
-                    /rpool/usr/local               \
-                    /rpool/gnote                   \
-                    /home/fbicknel                 \
-                    /vsw/Pictures                  \
-                    /vsw/Music                     \
-                    )
-    BACKUP_TARGETS_LEN=$((${#BACKUP_TARGETS[@]} - 1))
-    BACKUP_SOURCES_LEN=$((${#BACKUP_SOURCES[@]} - 1))
-    if [ $BACKUP_TARGETS_LEN -ne $BACKUP_SOURCES_LEN -o \
-        $BACKUP_TARGETS_LEN -lt 1 ]; then
-        echo "Invalid list of TARGETS and/or SOURCES."
-        echo "these lists should be the same length"
-        echo "and a non-empty list."
-        exit 9
-    fi
-    if [ $BACKUP_TARGETS_LEN -gt 50 ]; then
-        echo "Seems like something's wrong. I thought you said we"
-        echo "have a list of ${BACKUP_TARGETS_LEN} entites to back up??"
-        exit 1
-    fi
-    for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
-        # echo $i
-        TARGET=${BACKUP_TARGETS[$i]}
-        SOURCE=${BACKUP_SOURCES[$i]}
-        # echo "s: $SOURCE t: $TARGET"
-        ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
-        SNAP_TARGET=$(echo $TARGET|cut -b 2-)
-        SNAP_SOURCE=$(echo $SOURCE|cut -b 2-)
-        # echo "a: $ARCHIVE"
-        if [ "$1" == "nosnapshot" ]; then
-            :
-        else
-            if [ "$TARGET" != "SOURCE" ]; then
-                /root/bin/make_snapshot $SNAP_SOURCE $SNAP_TARGET
-            else
-                TARGET=$SOURCE
-            fi
-        fi
-        borg create                           \
-            --verbose                         \
-            --stats                           \
-            --list                            \
-            --show-rc                         \
-            --compression lz4                 \
-            --exclude-from /etc/borg/patterns \
-            ::'{hostname}-'${ARCHIVE}'-{now}' \
-            ${TARGET}                         \
-
-    done
+elif [ "$1" == 'nosnapshot' ]; then
+    unset MAKE_SS
 fi
+info "borgbackup Version $(version)"
+if [ -z "$MAKE_SS" ]; then
+    info "Not creating new snapshots."
+fi
+info "Starting backup"
+BACKUP_TARGETS=(SOURCE                         \
+                SOURCE                         \
+                /backup/rpool_usr_local_backup \
+                /backup/gnote_backup           \
+                /backup/fbicknel_backup        \
+                /backup/Pictures_backup        \
+                /backup/Music_backup           \
+                )
+
+BACKUP_SOURCES=(/root                          \
+                /etc                           \
+                /rpool/usr/local               \
+                /rpool/gnote                   \
+                /home/fbicknel                 \
+                /vsw/Pictures                  \
+                /vsw/Music                     \
+                )
+BACKUP_TARGETS_LEN=$((${#BACKUP_TARGETS[@]} - 1))
+BACKUP_SOURCES_LEN=$((${#BACKUP_SOURCES[@]} - 1))
+if [ $BACKUP_TARGETS_LEN -ne $BACKUP_SOURCES_LEN -o \
+    $BACKUP_TARGETS_LEN -lt 1 ]; then
+    echo "Invalid list of TARGETS and/or SOURCES."
+    echo "these lists should be the same length"
+    echo "and a non-empty list."
+    exit 9
+fi
+if [ $BACKUP_TARGETS_LEN -gt 50 ]; then
+    echo "Seems like something's wrong. I thought you said we"
+    echo "have a list of ${BACKUP_TARGETS_LEN} entites to back up??"
+    exit 1
+fi
+for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
+    # echo $i
+    TARGET=${BACKUP_TARGETS[$i]}
+    SOURCE=${BACKUP_SOURCES[$i]}
+    # echo "s: $SOURCE t: $TARGET"
+    ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
+    SNAP_TARGET=$(echo $TARGET|cut -b 2-)
+    SNAP_SOURCE=$(echo $SOURCE|cut -b 2-)
+    if [ "$TARGET" != "SOURCE" ]; then
+        if [ -n "$MAKE_SS" ]; then
+            /root/bin/make_snapshot $SNAP_SOURCE $SNAP_TARGET
+        fi
+    else
+        TARGET=$SOURCE
+    fi
+    borg create                           \
+        --verbose                         \
+        --stats                           \
+        --list                            \
+        --show-rc                         \
+        --compression lz4                 \
+        --exclude-from /etc/borg/patterns \
+        ::'{hostname}-'${ARCHIVE}'-{now}' \
+        ${TARGET}                         \
+
+done
 
 backup_exit=$?
 
@@ -123,7 +125,6 @@ else
         info "Pruning archive $ARCHIVE"
         borg prune                          \
             --list                          \
-            --dry-run                       \
             --glob-archives "${HOSTNAME}-${ARCHIVE}-*" \
             --show-rc                       \
             --stats                         \
