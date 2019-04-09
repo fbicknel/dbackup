@@ -1,0 +1,11 @@
+/var/log/backup/borgbackup.log
+{
+	rotate 7
+	daily
+	missingok
+	notifempty
+	delaycompress
+	# compress
+	endscript
+}
+
