@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 function version () {
-    echo "Version: 0.9"
+    echo "Version: $(/bin/cat /etc/borg/version)"
 }
 
 function cdate2date () {

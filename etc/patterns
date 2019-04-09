@@ -1,0 +1,10 @@
+sh:**/.ecryptfs
+sh:**/.Private
+sh:/var/cache/*
+sh:**/Downloads/**
+sh:**/tmp/**
+sh:**/temp/**
+sh:**/.cache/**
+sh:**/Cache/**
+sh:**/Trash/**
+sh:**/Dropbox/**

@@ -1,3 +1,2 @@
-bin/cleanup
-bin/dbackup
+bin/borgbackup
 bin/make_snapshot

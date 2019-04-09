@@ -1,0 +1,159 @@
+#!/bin/bash
+
+function version () {
+    echo "Version: $(/bin/cat /etc/borg/version)"
+}
+
+# Setting this, so the repo does not need to be given on the commandline:
+# export BORG_REPO=ssh://username@example.com:2022/~/backup/main
+export BORG_REPO='/mnt/backup/borgbackup'
+export BORG_CACHE_DIR='/root/.cache'
+export BORG_CONFIG_DIR='/root/.config/borg'
+
+# Setting this, so you won't be asked for your repository passphrase:
+# export BORG_PASSPHRASE='no, we don't use this'
+# or this to ask an external program to supply the passphrase:
+export BORG_PASSCOMMAND='cat /root/.passwords/borgbackup-prod'
+
+info() { printf "\n%s %s\n\n" "$(date)" "$*" >&2; }
+
+trap 'echo $(date) Backup interrupted >&2; exit 2' INT TERM
+MAKE_SS=Y # default to make a snapshot
+BACKUP_TARGETS=(SOURCE                         \
+                SOURCE                         \
+                /backup/rpool_usr_local_backup \
+                /backup/gnote_backup           \
+                /backup/fbicknel_backup        \
+                /backup/Pictures_backup        \
+                /backup/Music_backup           \
+                )
+
+BACKUP_SOURCES=(/root                          \
+                /etc                           \
+                /rpool/usr/local               \
+                /rpool/gnote                   \
+                /home/fbicknel                 \
+                /vsw/Pictures                  \
+                /vsw/Music                     \
+                )
+BACKUP_TARGETS_LEN=$((${#BACKUP_TARGETS[@]} - 1))
+BACKUP_SOURCES_LEN=$((${#BACKUP_SOURCES[@]} - 1))
+
+if [ "$1" == 'init' ]; then
+    info "Setting up repository"
+    borg                                \
+        --verbose                       \
+        init                            \
+        --encryption repokey-blake2     \
+        --make-parent-dirs              \
+    exit
+elif [ "$1" == 'list' ]; then
+    shift
+    info "Listing repository $@"
+    borg list $@
+    exit
+elif [ "$1" == 'listarchives' ]; then
+    shift
+    info "Listing repository by archives"
+    for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
+        SOURCE=${BACKUP_SOURCES[$i]}
+        ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
+        info "Listing archive ${ARCHIVE}"
+        borg list --glob-archives "*-${ARCHIVE}-*"
+    done
+    exit
+elif [ "$1" == 'version' -o "$1" == '--version' ]; then
+    info "borgbackup Version $(version)"
+    exit
+elif [ "$1" == 'nosnapshot' ]; then
+    unset MAKE_SS
+fi
+info "borgbackup Version $(version)"
+if [ -z "$MAKE_SS" ]; then
+    info "Not creating new snapshots."
+fi
+info "Starting backup"
+if [ $BACKUP_TARGETS_LEN -ne $BACKUP_SOURCES_LEN -o \
+    $BACKUP_TARGETS_LEN -lt 1 ]; then
+    echo "Invalid list of TARGETS and/or SOURCES."
+    echo "these lists should be the same length"
+    echo "and a non-empty list."
+    exit 9
+fi
+if [ $BACKUP_TARGETS_LEN -gt 50 ]; then
+    echo "Seems like something's wrong. I thought you said we"
+    echo "have a list of ${BACKUP_TARGETS_LEN} entites to back up??"
+    exit 1
+fi
+for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
+    # echo $i
+    TARGET=${BACKUP_TARGETS[$i]}
+    SOURCE=${BACKUP_SOURCES[$i]}
+    ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
+    SNAP_TARGET=$(echo $TARGET|cut -b 2-)
+    SNAP_SOURCE=$(echo $SOURCE|cut -b 2-)
+    if [ "$TARGET" != "SOURCE" ]; then
+        if [ -n "$MAKE_SS" ]; then
+            /root/bin/make_snapshot $SNAP_SOURCE $SNAP_TARGET
+        fi
+    else
+        TARGET=$SOURCE
+    fi
+    borg create                           \
+        --verbose                         \
+        --stats                           \
+        --list                            \
+        --show-rc                         \
+        --compression lz4                 \
+        --exclude-from /etc/borg/patterns \
+        ::'{hostname}-'${ARCHIVE}'-{now}' \
+        ${TARGET}                         \
+
+done
+
+backup_exit=$?
+
+if [ "$1" == 'init' ]; then
+    info "That's it."
+    prune_exit=0
+    ANNOTE="Init"
+else
+    info "Pruning repository"
+    ANNOTE_BOTH="Backup and Prune"
+    ANNOTE_MABE="Backup and/or Prune"
+
+    # Use the `prune` subcommand to maintain 7 daily, 4 weekly and 6 monthly
+    # archives of THIS machine. The '{hostname}-' prefix is very important to
+    # limit prune's operation to this machine's archives and not apply to
+    # other machines' archives also:
+
+    HOSTNAME=$(hostname)
+    for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
+        SOURCE=${BACKUP_SOURCES[$i]}
+        ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
+        info "Pruning archive $ARCHIVE"
+        borg prune                          \
+            --list                          \
+            --glob-archives "${HOSTNAME}-${ARCHIVE}-*" \
+            --show-rc                       \
+            --stats                         \
+            --keep-daily    7               \
+            --keep-weekly   4               \
+            --keep-monthly  6               \
+
+        prune_exit=$?
+    done
+
+fi
+# use highest exit code as global exit code
+global_exit=$(( backup_exit > prune_exit ? backup_exit : prune_exit ))
+
+if [ ${global_exit} -eq 0 ]; then
+    info "$ANNOTE_BOTH finished successfully"
+elif [ ${global_exit} -eq 1 ]; then
+    info "$ANNOTE_MABE finished with warnings"
+else
+    info "$ANNOTE_MABE finished with errors"
+fi
+
+exit ${global_exit}
