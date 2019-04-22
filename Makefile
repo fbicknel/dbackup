@@ -1,4 +1,16 @@
-prefix=''
+SHELL = /bin/sh
+
+# ifeq ($(BUILDDIR),)
+	# BUILDDIR := $(ROOT)/build
+# endif
+ifeq ($(PREFIX),)
+	PREFIX := /usr/local
+endif
+
+build:
+	@echo $(srcdir)
+	# mkdir $(BUILDDIR)
+	@echo done
 
 filelist := $$(cat MANIFEST)
 
