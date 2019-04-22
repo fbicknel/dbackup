@@ -1,2 +1,3 @@
 bin/borgbackup
 bin/make_snapshot
+bin/borg_spinup
