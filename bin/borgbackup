@@ -4,16 +4,8 @@ function version () {
     echo "Version: $(/bin/cat /etc/borg/version)"
 }
 
-# Setting this, so the repo does not need to be given on the commandline:
-# export BORG_REPO=ssh://username@example.com:2022/~/backup/main
-export BORG_REPO='/mnt/backup/borgbackup'
-export BORG_CACHE_DIR='/root/.cache'
-export BORG_CONFIG_DIR='/root/.config/borg'
-
-# Setting this, so you won't be asked for your repository passphrase:
-# export BORG_PASSPHRASE='no, we don't use this'
-# or this to ask an external program to supply the passphrase:
-export BORG_PASSCOMMAND='cat /root/.passwords/borgbackup-prod'
+# set up all the borg environment stuff
+source /root/borg/borgsetup
 
 info() { printf "\n%s %s\n\n" "$(date)" "$*" >&2; }
 
@@ -21,20 +13,14 @@ trap 'echo $(date) Backup interrupted >&2; exit 2' INT TERM
 MAKE_SS=Y # default to make a snapshot
 BACKUP_TARGETS=(SOURCE                         \
                 SOURCE                         \
-                /backup/rpool_usr_local_backup \
-                /backup/gnote_backup           \
-                /backup/fbicknel_backup        \
-                /backup/Pictures_backup        \
-                /backup/Music_backup           \
+                SOURCE                         \
+                SOURCE                         \
                 )
 
 BACKUP_SOURCES=(/root                          \
                 /etc                           \
-                /rpool/usr/local               \
-                /rpool/gnote                   \
                 /home/fbicknel                 \
-                /vsw/Pictures                  \
-                /vsw/Music                     \
+                /home/sbicknel                 \
                 )
 BACKUP_TARGETS_LEN=$((${#BACKUP_TARGETS[@]} - 1))
 BACKUP_SOURCES_LEN=$((${#BACKUP_SOURCES[@]} - 1))
