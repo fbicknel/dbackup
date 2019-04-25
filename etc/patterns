@@ -8,3 +8,6 @@ sh:**/.cache/**
 sh:**/Cache/**
 sh:**/Trash/**
 sh:**/Dropbox/**
+sh:**/gdrive/**
+sh:**/Google Drive/**
+sh:**/.dropbox*/**
