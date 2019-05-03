@@ -4,16 +4,7 @@ function version () {
     echo "Version: $(/bin/cat /etc/borg/version)"
 }
 
-# Setting this, so the repo does not need to be given on the commandline:
-# export BORG_REPO=ssh://username@example.com:2022/~/backup/main
-export BORG_REPO='/mnt/backup/borgbackup'
-export BORG_CACHE_DIR='/root/.cache'
-export BORG_CONFIG_DIR='/root/.config/borg'
-
-# Setting this, so you won't be asked for your repository passphrase:
-# export BORG_PASSPHRASE='no, we don't use this'
-# or this to ask an external program to supply the passphrase:
-export BORG_PASSCOMMAND='cat /root/.passwords/borgbackup-prod'
+source /root/bin/borg_spinup
 
 info() { printf "\n%s %s\n\n" "$(date)" "$*" >&2; }
 
