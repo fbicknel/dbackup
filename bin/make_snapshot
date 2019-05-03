@@ -65,6 +65,13 @@ function get_snapshot_listing () {
     SNAPSHOT_LISTING=($($SUDO zfs list -Ht snapshot -o name))
 }
 
+function end_game() {
+    local RV=$1
+    ENDTIME=$(date +%s)
+    echo "done at $(date). $(($ENDTIME - $STARTTIME)) elapsed seconds"
+    exit $RV
+}
+
 function send_first_full_snapshot () {
     echo -e "\tRemoving all source _backup snapshots"
     SI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_" } $0~p {print $1}'|sort))
@@ -94,10 +101,10 @@ function send_first_full_snapshot () {
     if [ -n "$DRY_RUN" ]; then
         echo "(dry-run)"
         echo "zfs send ${SI_SNAPSHOTS[0]} | $SUDO zfs receive -F $TARGET"
-        RV=0
+        return 0
     else
         $SUDO zfs send ${SI_SNAPSHOTS[0]} | $SUDO zfs receive -F $TARGET
-        RV=$?
+        return $?
     fi
 }
 
@@ -113,6 +120,22 @@ case $key in
     -f|--force-full)
         FORCE_NEW="-new"
         shift # past argument
+        ;;
+    -n|--noclone)
+        if [ "$CLONE" == 1 ]; then
+            echo "You cannot use both --clone and --noclone"
+            exit 2
+        fi
+        CLONE=0
+        shift
+        ;;
+    -c|--clone)
+        if [ "$CLONE" == 0 ]; then
+            echo "You cannot use both --clone and --noclone"
+            exit 2
+        fi
+        CLONE=1
+        shift
         ;;
     -p|--pool)
         POOL="$2"
@@ -137,6 +160,9 @@ case $key in
         ;;
 esac
 done
+if [ -z "$CLONE" ]; then
+    CLONE=1 # default is to clone
+fi
 set -- "${POSITIONAL[@]}" # restore positional parameters
 : ${POOL:=backup} #default is backup
 # SUDO="echo"
@@ -158,6 +184,9 @@ else
     else
         $SUDO zfs snapshot "${SOURCE}@backup_$(date +%s)" # this is what we're here for
     fi
+fi
+if [ "$CLONE" == 0 ]; then
+    end_game 0
 fi
 # First targets:
 get_snapshot_listing
@@ -195,7 +224,7 @@ if [ "$FORCE_NEW" = '-new' -o $TI_SNAPSHOT_QTY -eq 0 \
         echo "Not enough snapshots of either source ($SI_SNAPSHOT_QTY) or target ($TI_SNAPSHOT_QTY)"
     fi
     echo "**** Sending first snapshot, then."
-    send_first_full_snapshot
+    RV=$(send_first_full_snapshot)
 else
     T_KEEP=5
     echo "Clean up target snapshots:"
@@ -228,9 +257,7 @@ else
     if [ $RV != 0 ]; then
         echo
         echo "That didn't go well. I'll try sending a full snapshot instead:"
-        send_first_full_snapshot
+        RV=$(send_first_full_snapshot)
     fi
 fi
-ENDTIME=$(date +%s)
-echo "done at $(date). $(($ENDTIME - $STARTTIME)) elapsed seconds"
-exit $RV
+end_game $RV
