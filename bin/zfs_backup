@@ -1,0 +1,19 @@
+#!/bin/bash
+
+exec >> /var/log/zfs_backup.log 2>&1 <&-
+date
+set -x
+zfs destroy vsw/Meta@yesterday
+zfs rename vsw/Meta@today yesterday
+zfs snapshot vsw/Meta@today
+set -
+cd /vsw/Meta/.zfs/snapshot/today
+source /root/bin/borg_spinup
+
+export BORG_REPO=/backup/BorgTest
+
+echo "start at $(date)"
+borg create --verbose --list --stats \
+    --show-rc --compression lz4 ::MetaArchive_$(date +%s) .
+
+echo "done at $(date)"
