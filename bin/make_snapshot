@@ -52,8 +52,8 @@ function cleanup_snapshots () {
         local DATE=$(cdate2date $SS)
         echo "**** Cleaning up snapshot: $SS ($DATE)"
         if [ -n "$DRY_RUN" ]; then
-            echo "(dry-run)"
-            echo zfs destroy $SS
+            echo "(dry-run)" >&2
+            echo zfs destroy $SS >&2
         else
             $SUDO zfs destroy $SS
         fi
@@ -69,6 +69,11 @@ function end_game() {
     local RV=$1
     ENDTIME=$(date +%s)
     echo "done at $(date). $(($ENDTIME - $STARTTIME)) elapsed seconds"
+    if [ "$NAME" == 1 ]; then
+        # This doesn't work... FIXME
+        sh -c 'exec 0>&3' >/dev/null 2>&1 && 1>&3  # replace original stdout (if replaced)
+        echo "$SS_CREATED"
+    fi
     exit $RV
 }
 
@@ -89,11 +94,12 @@ function send_first_full_snapshot () {
     get_snapshot_listing
     echo -e "\tCreate new snapshot on source ($SOURCE)"
     # Note the _F_ in the snapshot name: this denotes the 'full' progenitor
+    SS_CREATED="backup_F_$(date +%s)"
     if [ -n "$DRY_RUN" ]; then
-        echo zfs snapshot "${SOURCE}@backup_F_$(date +%s)" 
+        echo zfs snapshot "${SOURCE}@${SS_CREATED}" 
         echo "(dry-run)"
     else
-        $SUDO zfs snapshot "${SOURCE}@backup_F_$(date +%s)" # this is what we're here for
+        $SUDO zfs snapshot "${SOURCE}@${SS_CREATED}" # this is what we're here for
     fi
     get_snapshot_listing
     SI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_" } $0~p {print $1}'|sort))
@@ -109,7 +115,6 @@ function send_first_full_snapshot () {
 }
 
 STARTTIME=$(date +%s)
-echo "begin at $(date)."
 SUDO=/usr/bin/sudo
 POSITIONAL=()
 while [[ $# -gt 0 ]]
@@ -146,6 +151,19 @@ case $key in
         USE_LAST_SNAPSHOT=1
         shift # past argument
         ;;
+    -n|--snap-name)
+        # Shut up (log to syslog) 
+        # AND give the name of the snapshot at the end of the run
+        # (the source snapshot)
+        QUIET=1
+        NAME=1
+        shift
+        ;;
+    -q|--quiet)
+        # Shut up (log to syslog) 
+        QUIET=1
+        shift
+        ;;
     -v|--version)
         version
         exit 0
@@ -154,35 +172,47 @@ case $key in
         DRY_RUN=1
         shift;
         ;;
-    *)    # unknown option
+    --*|-*)
+        # unknown option
+        echo "Unknown option: $key" >&2
+        exit 2
+        ;;
+    *)  # something else?
         POSITIONAL+=("$1") # save it in an array for later
         shift # past argument
         ;;
 esac
+if [ "$QUIET" == 1 ]; then
+    PROG=$(basename $0)
+    exec 3>&1 # save stdout
+    exec 1> >(logger -t "$PROG") 2>&1
+fi
 done
 if [ -z "$CLONE" ]; then
     CLONE=1 # default is to clone
 fi
+echo "begin at $(date)."
 set -- "${POSITIONAL[@]}" # restore positional parameters
 : ${POOL:=backup} #default is backup
 # SUDO="echo"
 SOURCE=${1:-home/fbicknel}
 TARGET=${2:-$POOL/fbicknel_backup}
 if [ -n "$FORCE_NEW" -a -n "$USE_LAST_SNAPSHOT" ]; then
-    echo "You can't try to force a new full and say use the last snapshot"
-    echo "--force-full and --use-last are mutually exclusive"
+    echo "You can't try to force a new full and say use the last snapshot" >&2
+    echo "--force-full and --use-last are mutually exclusive" >&2
     exit 1
 fi
 
 echo "Backup from $SOURCE -> $TARGET"
 if [ "$USE_LAST_SNAPSHOT" == 1 ]; then
-    echo "We are using the last incremental snapshot if we find one."
+    echo "We are using the last incremental snapshot if we find one." >&2
 else
+    SS_CREATED="backup_$(date +%s)"
     if [ -n "$DRY_RUN" ]; then
-        echo "(dry-run)"
-        echo zfs snapshot "${SOURCE}@backup_$(date +%s)" 
+        echo "(dry-run)" >&2
+        echo zfs snapshot "${SOURCE}@${SS_CREATED}"  >&2
     else
-        $SUDO zfs snapshot "${SOURCE}@backup_$(date +%s)" # this is what we're here for
+        $SUDO zfs snapshot "${SOURCE}@${SS_CREATED}" # this is what we're here for
     fi
 fi
 if [ "$CLONE" == 0 ]; then
@@ -193,19 +223,19 @@ get_snapshot_listing
 TI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$TARGET'@backup_[0-9]"   } $0~p {print $1}'|sort))
 TF_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$TARGET'@backup_F_[0-9]" } $0~p {print $1}'|sort))
 if [ -n "$DEBUG" ]; then
-    echo "TI: ${TI_SNAPSHOTS[@]}"
-    echo "TF: ${TF_SNAPSHOTS[@]}"
+    echo "TI: ${TI_SNAPSHOTS[@]}" >&2
+    echo "TF: ${TF_SNAPSHOTS[@]}" >&2
 fi
 
 # Now sources;
 SI_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_[0-9]" } $0~p {print $1}'|sort))
 if [ "$USE_LAST_SNAPSHOT" == 1 ]; then
-    echo "The last incremental snapshot was: ${SI_SNAPSHOTS[-1]}"
+    echo "The last incremental snapshot was: ${SI_SNAPSHOTS[-1]}" >&2
 fi
 SF_SNAPSHOTS=($(shuf -e "${SNAPSHOT_LISTING[@]}" | awk 'BEGIN { p="^'$SOURCE'@backup_F_[0-9]" } $0~p {print $1}'|sort))
 if [ -n "$DEBUG" ]; then
-    echo "SI: ${SI_SNAPSHOTS[@]}"
-    echo "SF: ${SF_SNAPSHOTS[@]}"
+    echo "SI: ${SI_SNAPSHOTS[@]}" >&2
+    echo "SF: ${SF_SNAPSHOTS[@]}" >&2
 fi
 
 SF_SNAPSHOT_QTY=${#SF_SNAPSHOTS[@]}
@@ -229,15 +259,15 @@ else
     T_KEEP=5
     echo "Clean up target snapshots:"
     if [ -n "$DRY_RUN" ]; then
-        echo "(dry-run)"
-        echo cleanup_snapshots TI_SNAPSHOTS[@] $T_KEEP "target incremental"
+        echo "(dry-run)" >&2
+        echo cleanup_snapshots TI_SNAPSHOTS[@] $T_KEEP "target incremental" >&2
     fi
     cleanup_snapshots TI_SNAPSHOTS[@] $T_KEEP "target incremental"
     S_KEEP=5
     echo "Clean up source snapshots:"
     if [ -n "$DRY_RUN" ]; then
-        echo "(dry-run)"
-        echo cleanup_snapshots SI_SNAPSHOTS[@] $S_KEEP "source incremental"
+        echo "(dry-run)" >&2
+        echo cleanup_snapshots SI_SNAPSHOTS[@] $S_KEEP "source incremental" >&2
     fi
     cleanup_snapshots SI_SNAPSHOTS[@] $S_KEEP "source incremental"
     get_snapshot_listing
@@ -247,15 +277,14 @@ else
     let S_LAST_DELETED=$SI_SNAPSHOT_QTY-$S_KEEP
     echo "Sending incremental snapshot data from $S_FULL_SNAPSHOT..$S_LAST_SNAPSHOT to $TARGET"
     if [ -n "$DRY_RUN" ]; then
-        echo "(dry-run)"
-        echo "zfs send -i $S_FULL_SNAPSHOT $S_LAST_SNAPSHOT | zfs receive -F $TARGET"
+        echo "(dry-run)" >&2
+        echo "zfs send -i $S_FULL_SNAPSHOT $S_LAST_SNAPSHOT | zfs receive -F $TARGET" >&2
         RV=0
     else
         $SUDO zfs send -i $S_FULL_SNAPSHOT $S_LAST_SNAPSHOT | $SUDO zfs receive -F $TARGET
         RV=$?
     fi
     if [ $RV != 0 ]; then
-        echo
         echo "That didn't go well. I'll try sending a full snapshot instead:"
         RV=$(send_first_full_snapshot)
     fi
