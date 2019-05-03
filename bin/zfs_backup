@@ -1,6 +1,6 @@
 #!/bin/bash
 
-exec >> /var/log/zfs_backup.log 2>&1 <&-
+exec >> /var/log/backup/zfs_backup.log 2>&1 <&-
 date
 set -x
 zfs destroy vsw/Meta@yesterday
@@ -13,7 +13,18 @@ source /root/bin/borg_spinup
 export BORG_REPO=/backup/BorgTest
 
 echo "start at $(date)"
+ARCHIVE=$(date +%s)
 borg create --verbose --list --stats \
-    --show-rc --compression lz4 ::MetaArchive_$(date +%s) .
+    --show-rc --compression lz4 ::MetaArchive_${ARCHIVE} .
+
+echo "done/start pruning $(date)"
+        borg prune                          \
+            --list                          \
+            ::                              \
+            --show-rc                       \
+            --stats                         \
+            --keep-daily    7               \
+            --keep-weekly   4               \
+            --keep-monthly  6               \
 
 echo "done at $(date)"
