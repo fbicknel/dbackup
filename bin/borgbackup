@@ -1,8 +1,17 @@
 #!/bin/bash
 
+if [ "$1" == '--dry-run' ]; then
+    shift
+    DRY_RUN=1
+else
+    :
+    exec >> /var/log/backup/borgbackup.log 2>&1
+fi
+
 function version () {
     echo "Version: $(/bin/cat /etc/borg/version)"
 }
+
 
 source /root/bin/borg_spinup
 
@@ -17,6 +26,7 @@ BACKUP_TARGETS=(SOURCE                         \
                 /backup/fbicknel_backup        \
                 /backup/Pictures_backup        \
                 /backup/Music_backup           \
+                SOURCE_SNAPSHOT                \
                 )
 
 BACKUP_SOURCES=(/root                          \
@@ -26,6 +36,7 @@ BACKUP_SOURCES=(/root                          \
                 /home/fbicknel                 \
                 /vsw/Pictures                  \
                 /vsw/Music                     \
+                /vsw/Meta                      \
                 )
 BACKUP_TARGETS_LEN=$((${#BACKUP_TARGETS[@]} - 1))
 BACKUP_SOURCES_LEN=$((${#BACKUP_SOURCES[@]} - 1))
@@ -66,30 +77,58 @@ fi
 info "Starting backup"
 if [ $BACKUP_TARGETS_LEN -ne $BACKUP_SOURCES_LEN -o \
     $BACKUP_TARGETS_LEN -lt 1 ]; then
-    echo "Invalid list of TARGETS and/or SOURCES."
-    echo "these lists should be the same length"
-    echo "and a non-empty list."
+    info "Invalid list of TARGETS and/or SOURCES."
+    info "these lists should be the same length"
+    info "and a non-empty list."
     exit 9
 fi
 if [ $BACKUP_TARGETS_LEN -gt 50 ]; then
-    echo "Seems like something's wrong. I thought you said we"
-    echo "have a list of ${BACKUP_TARGETS_LEN} entites to back up??"
+    info "Seems like something's wrong. I thought you said we"
+    info "have a list of ${BACKUP_TARGETS_LEN} entites to back up??"
     exit 1
 fi
+TARGET_LIST=()
 for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
-    # echo $i
-    TARGET=${BACKUP_TARGETS[$i]}
     SOURCE=${BACKUP_SOURCES[$i]}
-    ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
-    SNAP_TARGET=$(echo $TARGET|cut -b 2-)
-    SNAP_SOURCE=$(echo $SOURCE|cut -b 2-)
-    if [ "$TARGET" != "SOURCE" ]; then
-        if [ -n "$MAKE_SS" ]; then
-            /root/bin/make_snapshot $SNAP_SOURCE $SNAP_TARGET
-        fi
-    else
+    unset SNAP_SOURCE SNAP_TARGET
+    TARGET=${BACKUP_TARGETS[$i]}
+    if [ "$TARGET" == "SOURCE_SNAPSHOT" ]; then
+        # simple snapshot; no cloning
         TARGET=$SOURCE
+        if [ -n "$MAKE_SS" ]; then
+            ZFS_FS=$(echo $SOURCE|cut -b 2-) # trim leading /
+            if [ "$DRY_RUN" == 1 ]; then
+                echo "zfs destroy ${ZFS_FS}@yesterday"
+                echo "zfs rename ${ZFS_FS}@today yesterday"
+                echo "zfs snapshot ${ZFS_FS}@today"
+            else
+                if [ -z "$MAKE_SS" ]; then
+                    info "Not creating new snapshots"
+                else
+                    zfs destroy ${ZFS_FS}@yesterday || info "No yesterday snapshot found"
+                    zfs rename ${ZFS_FS}@today yesterday || info "No today snapshot found"
+                    zfs snapshot ${ZFS_FS}@today || (info "Couldn't create today snapshot" && exit 2)
+                fi
+            fi
+            # /vsw/Meta/.zfs/snapshot/today
+            TARGET="${TARGET}/.zfs/snapshot/today"
+        fi
+    elif [ "$TARGET" == 'SOURCE' ]; then
+        TARGET=$SOURCE
+    else
+        SNAP_TARGET=$(echo $TARGET|cut -b 2-)
+        SNAP_SOURCE=$(echo $SOURCE|cut -b 2-)
+        if [ -n "$MAKE_SS" ]; then
+            if [ "$DRY_RUN" == 1 ]; then
+                echo "/root/bin/make_snapshot $SNAP_SOURCE $SNAP_TARGET (dry-run)"
+            else
+                /root/bin/make_snapshot $SNAP_SOURCE $SNAP_TARGET
+            fi
+        fi
     fi
+    ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
+    TARGET_LIST+=($TARGET)
+    CMD="\
     borg create                           \
         --verbose                         \
         --stats                           \
@@ -99,7 +138,12 @@ for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
         --exclude-from /etc/borg/patterns \
         ::'{hostname}-'${ARCHIVE}'-{now}' \
         ${TARGET}                         \
-
+        "
+    if [ "$DRY_RUN" == 1 ]; then
+        echo "$CMD"
+    else
+        bash -c "$CMD"
+    fi
 done
 
 backup_exit=$?
@@ -115,23 +159,29 @@ else
 
     # Use the `prune` subcommand to maintain 7 daily, 4 weekly and 6 monthly
     # archives of THIS machine. The '{hostname}-' prefix is very important to
-    # limit prune's operation to this machine's archives and not apply to
-    # other machines' archives also:
+    # limit prunes operation to this machines archives and not apply to
+    # other machines archives also:
 
     HOSTNAME=$(hostname)
     for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
         SOURCE=${BACKUP_SOURCES[$i]}
         ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
         info "Pruning archive $ARCHIVE"
+        CMD=' \
         borg prune                          \
             --list                          \
-            --glob-archives "${HOSTNAME}-${ARCHIVE}-*" \
+            --glob-archives '\""${HOSTNAME}-${ARCHIVE}-*"\"' \
             --show-rc                       \
             --stats                         \
             --keep-daily    7               \
             --keep-weekly   4               \
             --keep-monthly  6               \
-
+            '
+        if [ "$DRY_RUN" == 1 ]; then
+            echo "$CMD"
+        else
+            bash -c "$CMD"
+        fi
         prune_exit=$?
     done
 
