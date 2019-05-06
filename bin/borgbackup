@@ -102,11 +102,16 @@ for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
                 echo "zfs rename ${ZFS_FS}@today yesterday"
                 echo "zfs snapshot ${ZFS_FS}@today"
             else
-                zfs destroy ${ZFS_FS}@yesterday || info "No yesterday snapshot found"
-                zfs rename ${ZFS_FS}@today yesterday || info "No today snapshot found"
-                zfs snapshot ${ZFS_FS}@today || (info "Couldn't create today snapshot" && exit 2)
+                if [ -z "$MAKE_SS" ]; then
+                    info "Not creating new snapshots"
+                else
+                    zfs destroy ${ZFS_FS}@yesterday || info "No yesterday snapshot found"
+                    zfs rename ${ZFS_FS}@today yesterday || info "No today snapshot found"
+                    zfs snapshot ${ZFS_FS}@today || (info "Couldn't create today snapshot" && exit 2)
+                fi
             fi
-            TARGET=$(echo $TARGET|cut -b 2-)'@today'
+            # /vsw/Meta/.zfs/snapshot/today
+            TARGET="${TARGET}/.zfs/snapshot/today"
         fi
     elif [ "$TARGET" == 'SOURCE' ]; then
         TARGET=$SOURCE
@@ -137,9 +142,7 @@ for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
     if [ "$DRY_RUN" == 1 ]; then
         echo "$CMD"
     else
-        set -x
         bash -c "$CMD"
-        set -
     fi
 done
 
@@ -177,9 +180,7 @@ else
         if [ "$DRY_RUN" == 1 ]; then
             echo "$CMD"
         else
-            set -x
             bash -c "$CMD"
-            set -
         fi
         prune_exit=$?
     done
