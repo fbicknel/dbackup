@@ -1,2 +1,4 @@
 bin/borgbackup
 bin/make_snapshot
+bin/borg_spinup
+bin/zfs_backup
