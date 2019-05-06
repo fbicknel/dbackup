@@ -5,11 +5,7 @@ filelist := $$(cat MANIFEST)
 install: install_bin install_cron install_etc
 
 install_cron:
-	crontab -l | sed -e '/###001borg###/d'| sed -e '$$a30 0  * * * nice -n 19 /root/bin/borgbackup >> /var/log/backup/borgbackup.log 2>&1 ###001borg###' | crontab -
-
-uninstall_cron:
-	crontab -l | sed -e '/###@borg@###/d'| crontab -
-	crontab -l | sed -e '/###[0-9][0-9][0-9]borg###/d'| crontab -
+	install -o root -g adm -m 0640 cron/borgbackup $(prefix)/etc/cron.d
 
 install_etc:
 	test -d $(prefix)/etc/logrotate.d || mkdir -p $(prefix)/etc/logrotate.d
@@ -35,6 +31,9 @@ uninstall_bin:
 uninstall_etc:
 	-rm -f  $(prefix)/etc/logrotate.d/borgbackup
 	-rm -rf $(prefix)/etc/borg
+
+uninstall_cron:
+	-rm -f $(prefix)/etc/cron.d/borgbackup
 
 reinstall: uninstall install
 
