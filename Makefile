@@ -37,5 +37,15 @@ uninstall_cron:
 
 reinstall: uninstall install
 
-.PHONY: install uninstall reinstall install_cron install_bin install_etc uninstall_etc
+.PHONY: install uninstall reinstall install_cron install_bin install_etc uninstall_etc gitrevchk
+
+gitrevchk:
+	cd /root/bin
+	for file in $(filelist); do \
+		cp /root/$$file bin ;\
+	done
+	cp /etc/logrotate.d/borgbackup etc/logrotate.d
+	cp /etc/borg/patterns etc
+	cp /etc/borg/version  etc
+	cp /etc/cron.d/borgbackup cron
 
