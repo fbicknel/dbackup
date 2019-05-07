@@ -1,34 +1,57 @@
 #!/bin/bash
 
-if [ "$1" == '--dry-run' ]; then
-    shift
-    DRY_RUN=1
-else
-    :
-    exec >> /var/log/backup/borgbackup.log 2>&1
-fi
-
 function version () {
     echo "Version: $(/bin/cat /etc/borg/version)"
 }
-
 
 source /root/bin/borg_spinup
 
 info() { printf "\n%s %s\n\n" "$(date)" "$*" >&2; }
 
-trap 'echo $(date) Backup interrupted >&2; exit 2' INT TERM
-MAKE_SS=Y # default to make a snapshot
-BACKUP_TARGETS=(SOURCE                         \
-                SOURCE                         \
-                /backup/rpool_usr_local_backup \
-                /backup/gnote_backup           \
-                /backup/fbicknel_backup        \
-                /backup/Pictures_backup        \
-                /backup/Music_backup           \
-                SOURCE_SNAPSHOT                \
-                )
+MAKE_SS=1
+DRY_RUN=0
+LIST_ARCHIVES=0
+INIT=0
+for i in "$@"; do
+    case $i in
+        --dry-run)
+            DRY_RUN=1
+            ;;
+        --init)
+            INIT=1
+            info "Setting up repository"
+            borg                                \
+                --verbose                       \
+                init                            \
+                --encryption repokey-blake2     \
+                --make-parent-dirs              \
+            exit $?
+            ;;
+        --list)
+            info "Listing repository $@"
+            borg list $@
+            exit $?
+            ;;
+        --listarchives)
+            LIST_ARCHIVES=1
+            ;;
+        --version)
+            info "borgbackup $(version)"
+            exit 0
+            ;;
+        --nosnapshot)
+            MAKE_SS=0
+            ;;
+    esac
+done
 
+if [ $DRY_RUN != 1 ]; then
+    exec >> /var/log/backup/borgbackup.log 2>&1
+fi
+
+trap 'echo $(date) Backup interrupted >&2; exit 2' INT TERM
+
+if true; then
 BACKUP_SOURCES=(/root                          \
                 /etc                           \
                 /rpool/usr/local               \
@@ -38,24 +61,33 @@ BACKUP_SOURCES=(/root                          \
                 /vsw/Music                     \
                 /vsw/Meta                      \
                 )
+
+BACKUP_TARGETS=(SOURCE                         \
+                SOURCE                         \
+                /backup/rpool_usr_local_backup \
+                /backup/gnote_backup           \
+                /backup/fbicknel_backup        \
+                /backup/Pictures_backup        \
+                /backup/Music_backup           \
+                SOURCE_SNAPSHOT                \
+                )
+else
+    BACKUP_SOURCES=(/root \
+        /rpool/usr/local \
+        /vsw/Meta \
+        )
+    BACKUP_TARGETS=(SOURCE \
+        /backup/rpool_usr_local_backup \
+        SOURCE_SNAPSHOT            \
+        )
+fi
+
 BACKUP_TARGETS_LEN=$((${#BACKUP_TARGETS[@]} - 1))
 BACKUP_SOURCES_LEN=$((${#BACKUP_SOURCES[@]} - 1))
 
-if [ "$1" == 'init' ]; then
-    info "Setting up repository"
-    borg                                \
-        --verbose                       \
-        init                            \
-        --encryption repokey-blake2     \
-        --make-parent-dirs              \
-    exit
-elif [ "$1" == 'list' ]; then
-    shift
-    info "Listing repository $@"
-    borg list $@
-    exit
-elif [ "$1" == 'listarchives' ]; then
-    shift
+info "borgbackup Version $(version)"
+
+if [ $LIST_ARCHIVES == 1 ]; then
     info "Listing repository by archives"
     for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
         SOURCE=${BACKUP_SOURCES[$i]}
@@ -63,20 +95,15 @@ elif [ "$1" == 'listarchives' ]; then
         info "Listing archive ${ARCHIVE}"
         borg list --glob-archives "*-${ARCHIVE}-*"
     done
-    exit
-elif [ "$1" == 'version' -o "$1" == '--version' ]; then
-    info "borgbackup Version $(version)"
-    exit
-elif [ "$1" == 'nosnapshot' ]; then
-    unset MAKE_SS
+    exit $?
 fi
-info "borgbackup Version $(version)"
-if [ -z "$MAKE_SS" ]; then
+
+if [ $MAKE_SS == 0  ]; then
     info "Not creating new snapshots."
 fi
 info "Starting backup"
 if [ $BACKUP_TARGETS_LEN -ne $BACKUP_SOURCES_LEN -o \
-    $BACKUP_TARGETS_LEN -lt 1 ]; then
+    $BACKUP_TARGETS_LEN -lt 0 ]; then
     info "Invalid list of TARGETS and/or SOURCES."
     info "these lists should be the same length"
     info "and a non-empty list."
@@ -87,15 +114,13 @@ if [ $BACKUP_TARGETS_LEN -gt 50 ]; then
     info "have a list of ${BACKUP_TARGETS_LEN} entites to back up??"
     exit 1
 fi
-TARGET_LIST=()
 for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
     SOURCE=${BACKUP_SOURCES[$i]}
     unset SNAP_SOURCE SNAP_TARGET
     TARGET=${BACKUP_TARGETS[$i]}
     if [ "$TARGET" == "SOURCE_SNAPSHOT" ]; then
         # simple snapshot; no cloning
-        TARGET=$SOURCE
-        if [ -n "$MAKE_SS" ]; then
+        if [ $MAKE_SS == 1 ]; then
             ZFS_FS=$(echo $SOURCE|cut -b 2-) # trim leading /
             if [ "$DRY_RUN" == 1 ]; then
                 echo "zfs destroy ${ZFS_FS}@yesterday"
@@ -105,20 +130,23 @@ for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
                 if [ -z "$MAKE_SS" ]; then
                     info "Not creating new snapshots"
                 else
+                    info "Remove *yesterday* snapshot"
                     zfs destroy ${ZFS_FS}@yesterday || info "No yesterday snapshot found"
+                    info "Rename *today* to *yesterday*"
                     zfs rename ${ZFS_FS}@today yesterday || info "No today snapshot found"
+                    info "Create new *today* snapshot*"
                     zfs snapshot ${ZFS_FS}@today || (info "Couldn't create today snapshot" && exit 2)
                 fi
             fi
-            # /vsw/Meta/.zfs/snapshot/today
-            TARGET="${TARGET}/.zfs/snapshot/today"
         fi
+        # /vsw/Meta/.zfs/snapshot/today
+        TARGET="${SOURCE}/.zfs/snapshot/today"
     elif [ "$TARGET" == 'SOURCE' ]; then
         TARGET=$SOURCE
     else
         SNAP_TARGET=$(echo $TARGET|cut -b 2-)
         SNAP_SOURCE=$(echo $SOURCE|cut -b 2-)
-        if [ -n "$MAKE_SS" ]; then
+        if [ $MAKE_SS == 1 ]; then
             if [ "$DRY_RUN" == 1 ]; then
                 echo "/root/bin/make_snapshot $SNAP_SOURCE $SNAP_TARGET (dry-run)"
             else
@@ -127,7 +155,6 @@ for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
         fi
     fi
     ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
-    TARGET_LIST+=($TARGET)
     CMD="\
     borg create                           \
         --verbose                         \
@@ -148,44 +175,38 @@ done
 
 backup_exit=$?
 
-if [ "$1" == 'init' ]; then
-    info "That's it."
-    prune_exit=0
-    ANNOTE="Init"
-else
-    info "Pruning repository"
-    ANNOTE_BOTH="Backup and Prune"
-    ANNOTE_MABE="Backup and/or Prune"
+info "Pruning repository"
+ANNOTE_BOTH="Backup and Prune"
+ANNOTE_MABE="Backup and/or Prune"
 
-    # Use the `prune` subcommand to maintain 7 daily, 4 weekly and 6 monthly
-    # archives of THIS machine. The '{hostname}-' prefix is very important to
-    # limit prunes operation to this machines archives and not apply to
-    # other machines archives also:
+# Use the `prune` subcommand to maintain 7 daily, 4 weekly and 6 monthly
+# archives of THIS machine. The '{hostname}-' prefix is very important to
+# limit prunes operation to this machines archives and not apply to
+# other machines archives also:
 
-    HOSTNAME=$(hostname)
-    for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
-        SOURCE=${BACKUP_SOURCES[$i]}
-        ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
-        info "Pruning archive $ARCHIVE"
-        CMD=' \
-        borg prune                          \
-            --list                          \
-            --glob-archives '\""${HOSTNAME}-${ARCHIVE}-*"\"' \
-            --show-rc                       \
-            --stats                         \
-            --keep-daily    7               \
-            --keep-weekly   4               \
-            --keep-monthly  6               \
-            '
-        if [ "$DRY_RUN" == 1 ]; then
-            echo "$CMD"
-        else
-            bash -c "$CMD"
-        fi
-        prune_exit=$?
-    done
+HOSTNAME=$(hostname)
+for i in $(seq 0 ${BACKUP_TARGETS_LEN}); do
+    SOURCE=${BACKUP_SOURCES[$i]}
+    ARCHIVE=$(echo $SOURCE | cut -b 2- | tr / _)
+    info "Pruning archive $ARCHIVE"
+    CMD=' \
+    borg prune                          \
+        --list                          \
+        --glob-archives '\""${HOSTNAME}-${ARCHIVE}-*"\"' \
+        --show-rc                       \
+        --stats                         \
+        --keep-daily    7               \
+        --keep-weekly   4               \
+        --keep-monthly  6               \
+        '
+    if [ "$DRY_RUN" == 1 ]; then
+        echo "$CMD"
+    else
+        bash -c "$CMD"
+    fi
+    prune_exit=$?
+done
 
-fi
 # use highest exit code as global exit code
 global_exit=$(( backup_exit > prune_exit ? backup_exit : prune_exit ))
 
