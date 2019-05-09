@@ -1,0 +1,4 @@
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Backup vsw/Meta to backup_vsw/Meta
+27 22 * * * root /bin/bash -c 'exec >> /var/log/backup/borg.cronup 2>&1 ; /root/bin/borgbackup '
